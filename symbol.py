@@ -3,15 +3,19 @@ import re
 import pandas as pd
 import numpy as np
 import datetime as dt
-import matplotlib.pyplot as plt
+import time
 
 #conda install -c https://conda.anaconda.org/anaconda pandas-datareader
 import pandas_datareader.data as web
 import pandas_datareader as pdr
 from pandas import DataFrame
+from pandas.tseries.offsets import BDay # business days
 from pandas_datareader._utils import RemoteDataError
 from pandas.io.common import urlopen
 from bs4 import BeautifulSoup
+
+# matplotlib
+import matplotlib.pyplot as plt
 
 # conda install -c conda-forge selenium=3.0.1
 from selenium import webdriver
@@ -31,22 +35,25 @@ def get_exchange_by_sym(sym):
 
 def parse_start_end_date(start, end):
     """
-    Convert date time in string to datetime.
-    For datetime inputs, do nothing.
+    Convert input date time to datetime.date.
     """
     if start == None:
         start = DEFAULT_START_DATE
     if type(start) == str:
-        start_date=pd.to_datetime(start).to_pydatetime()
+        start_date = pd.to_datetime(start).date()
+    elif type(start) == pd.tslib.Timestamp:
+        start_date = start.date()
     else:
         start_date = start
     if end != None:
         if type(end) == str:
-            end_date = pd.to_datetime(end).to_pydatetime()
+            end_date = pd.to_datetime(end).date()
+        elif type(end) == pd.tslib.Timestamp:
+            end_date = end.date()
         else:
             end_date = end
     else:
-        end_date = dt.date.today()
+        end_date = dt.datetime.today().date()
     return [start_date, end_date]
 
 def get_stats_intervals(end=None):
@@ -162,6 +169,7 @@ def get_symbol_yahoo_stats(symbols):
     # e.g. XOM+BBDb.TO+JNJ+MSFT
     sym_str = '+'.join(sym_list)
     url_str += 's=' + sym_str
+    url_str = url_str.strip().replace(' ','') # remove all spaces
 
     # Yahoo Finance tags, refer to http://www.financialwisdomforum.org/gummy-stuff/Yahoo-data.htm
     tags = {'s':'Symbol', 'x':'Exchange', 'j1':'Market Cap', 'b4':'Book Value', 'r':'P/E', 'p5':'Price/Sales',
@@ -173,10 +181,71 @@ def get_symbol_yahoo_stats(symbols):
         raw = resp.read()
     lines = raw.decode('utf-8').strip().replace('"', '').split('\n')
     lines = [line.strip().split(',') for line in lines]
+    if len(lines) < 1 or len(lines[0]) < len(tags) :
+        print('Error: failed to download Yahoo stats from %s' %url_str)
+        return DataFrame()
     stats = DataFrame(lines, columns=list(tags.values()))
     stats = stats.drop_duplicates()
     stats = stats.set_index('Symbol')
     return stats
+
+def moving_average(x, n=10, type='simple'):
+    """
+    Calculate simple/exponential moving average.
+
+    Inputs:
+        x - list, Numpy array, Pandas Series
+        n - window of the moving average
+        type - 'simple' or 'exponential'
+    Return: pandas Series with the same length as input x.
+
+    Exponential Moving Average(EMA), calculated by
+        SMA: 10 period sum / 10 
+        Multiplier: (2 / (Time periods + 1) ) = (2 / (10 + 1) ) = 0.1818 (18.18%)
+        EMA: {Close - EMA(previous day)} x multiplier + EMA(previous day).
+    """
+    x = np.asarray(x)
+    if type == 'simple':
+        # SMA
+        w = np.ones(n)
+        w /= w.sum() # weights
+        avg = np.convolve(x, w, mode='full')[:len(x)]
+        avg[:n] = avg[n]
+    else:
+        # EMA
+        avg = np.zeros_like(x)
+        avg[:n] = x[:n].mean() # initialization
+        m = 2/(n+1) # multiplier
+        for i in np.arange(n,len(x)):
+            avg[i] = (x[i] - avg[i-1]) * m + avg[i-1]
+    return avg
+
+def find_trend(y):
+    """
+    Find the trend of input data.
+
+    Input: array-like numbers
+    Return: slope for line or 0 for turnaround
+    """
+    y = np.asarray(y)
+    if len(y) < 4:
+        return 0
+    x = np.arange(len(y))
+
+    # line-fitting the first and second half data - if the slopes are both positive or negative,
+    # then these data can be fitted by a line. Otherwise, this is a turn over.
+    mid = int(len(y)/2)
+    y1 = y[:mid]
+    y2 = y[mid:]
+    x1 = np.arange(len(y1))
+    x2 = np.arange(len(y2))
+    p1 = np.polyfit(x1, y1, 1)
+    p2 = np.polyfit(x2, y2, 1)
+    if (p1[0] > 0 and p2[0] < 0) or (p1[0] < 0 and p2[0] > 0):
+        return 0 # turnaround
+    # these data can be fitted by a line
+    p = np.polyfit(x,y,1)
+    return p[0]
 
 class Symbol:
     """
@@ -229,6 +298,8 @@ class Symbol:
             self.quotes = web.DataReader(sym, "yahoo", start_date, end_date)
         except RemoteDataError:
             print('Error: failed to get quotes for '+sym+' from Yahoo Finance.')
+            return None
+        self.start_date = self.quotes.first_valid_index().date() # update start date
         return self.quotes
 
     def get_financials(self, browser=None):
@@ -340,24 +411,29 @@ class Symbol:
             P1 = Ending Stock Price
             D  = Dividends
         """
+        if self.quotes.empty:
+            self.get_quotes()
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         adj_close = self.quotes.loc[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close']
-        no_dividend = (str(self.stats['Dividend Yield'][self.sym]).upper() == 'N/A')
+        if self.quotes.empty or len(adj_close) < 1:
+            return -99999999
+        no_dividend = ('Dividend Yield' not in self.stats.columns) or (str(self.stats['Dividend Yield'][self.sym]).upper() == 'N/A')
         if exclude_dividend or no_dividend:
             dividend = 0
         else:
             # For simplicity, suppose the dividend yield is calculated as
             #   Dividend Yield = (Annual Dividends Per Share) / (Avg Price Per Share)
             # This is not accurate and need to be enhanced.
-            dividend = float(self.stats['Dividend Yield'][self.sym]) * adj_close.mean() / 100
-        roi = (adj_close[len(adj_close)-1] - adj_close[0] + dividend) / adj_close[0]
+            dividend = float(self.stats['Dividend Yield'][self.sym]) * adj_close.mean() / 100 # yearly dividend
+            dividend = dividend / 365 * (end_date-start_date).days # dividend in the range
+        roi = (adj_close[-1] - adj_close[0] + dividend) / adj_close[0]
         return roi
 
     def get_additional_stats(self, exclude_dividend=False):
         """
         Additional stats that calculated based on history price.
         """
-        labels = ['Symbol', 'Last-Quarter Return', 'Half-Year Return', '1-Year Return', '2-Year Return', '3-Year Return', '5-Year Return', 'Price In 52-week Range']
+        labels = ['Symbol', 'Last-Quarter Return', 'Half-Year Return', '1-Year Return', '2-Year Return', '3-Year Return', '5-Year Return', 'Yearly Return', 'Price In 52-week Range']
         if self.quotes.empty:
             self.get_quotes()
         if self.quotes.empty:
@@ -375,12 +451,25 @@ class Symbol:
         three_year_return = self.return_on_investment(three_year_ago, end_date, exclude_dividend)
         five_year_return = self.return_on_investment(five_year_ago, end_date, exclude_dividend)
 
-        adj_close = self.quotes.loc[one_year_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close']
-        current = adj_close[len(adj_close) - 1]
-        # Current price in 52-week range should between [0, 1] - larger number means more expensive.
-        pos_in_range = (current - adj_close.min()) / (adj_close.max() - adj_close.min())
+        yearly_return = 0.0
+        start_date = self.quotes.first_valid_index().date()
+        days = pd.date_range(end=end_date, periods=6, freq='365D')[::-1] # The past 5 years in reverse order
+        for i in range(1, len(days)):
+            if days[i].date() < start_date:
+                break # out of boundary
+            #print('yearly: %s - %s' %(days[i].ctime(), days[i-1].ctime()))  # FIXME: TEST
+            yearly_return += self.return_on_investment(days[i], days[i-1], exclude_dividend)
+        yearly_return /= i
 
-        st = [[self.sym, quarter_return, half_year_return, one_year_return, two_year_return, three_year_return, five_year_return, pos_in_range]]
+        adj_close = self.quotes.loc[one_year_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close'].dropna()
+        if not adj_close.empty and len(adj_close) > 0:
+            current = adj_close[-1]
+            # Current price in 52-week range should between [0, 1] - larger number means more expensive.
+            pos_in_range = (current - adj_close.min()) / (adj_close.max() - adj_close.min())
+        else:
+            pos_in_range = 0
+
+        st = [[self.sym, quarter_return, half_year_return, one_year_return, two_year_return, three_year_return, five_year_return, yearly_return, pos_in_range]]
         stats = DataFrame(st, columns=labels)
         stats = stats.drop_duplicates()
         stats = stats.set_index('Symbol')
@@ -389,73 +478,167 @@ class Symbol:
     def sma(self, n=20, start=None, end=None):
         """
         Calculate the Simple Moving Average.
+        Return - pandas Series.
         """
         [start_date, end_date] = self._handle_start_end_dates(start, end)
-        stock = self.quotes.loc[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),:]
-        move_avg = np.round(stock["Adj Close"].rolling(window = n, center = False).mean(), 2)
-        return move_avg
+        stock = self.quotes["Adj Close"]
+        move_avg = pd.Series(moving_average(stock, n, type='simple'), index=stock.index)
+        return move_avg[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
 
-    def sma_diff_to_index(self, index, n=10, start=None, end=None):
+    def ema(self, n=10, start=None, end=None):
         """
-        Calculate the acculated differences(simple moving average) of this symbol and the given index.
-        index: Symbol of index(e.g. sp500)
+        Exponential Moving Average(EMA)
+        Return - pandas Series.
         """
+        if self.quotes.empty:
+            self.get_quotes()
+        if self.quotes.empty:
+            return pd.Series()
+        [start_date, end_date] = self._handle_start_end_dates(start, end)
+        # EMA is start date sensitive
+        tmp_start = start_date - BDay(n) # The first n days are used for init, so go back for n business days
+        stock = self.quotes['Adj Close'][tmp_start.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+        avg = pd.Series(moving_average(stock, n, type='exponential'), index=stock.index)
+        return avg[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
+
+    def diverge_to_index(self, index, n=10, start=None, end=None):
+        """
+        Calculate the diverge between this symbol and the given index.
+        Exponential moving average is used for smoothing the prices.
+
+        Inputs:
+            index - Symbol of index(e.g. sp500)
+            n - window passed to EMA
+        Return - Pandas Series of differences
+        """
+        if self.quotes.empty:
+            self.get_quotes()
+        if index.quotes.empty:
+            index.get_quotes()
         if self.quotes.empty or index.quotes.empty:
-            return -99999999
+            return pd.Series()
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         # use the latest available starting date
-        latest = max(self.quotes.first_valid_index(), index.quotes.first_valid_index(), pd.Timestamp(start_date.ctime()))
-        start_date = latest.to_pydatetime()
-        move_avg_index = index.sma(n, start_date, end_date).dropna()
-        move_avg_index /= move_avg_index[0]
-        move_avg_symbol = self.sma(n, start_date, end_date).dropna()
-        move_avg_symbol /= move_avg_symbol[0]
+        start_date = max(self.quotes.first_valid_index().date(), index.quotes.first_valid_index().date(), start_date)
+        #print('start: '+start_date.ctime()+', end: '+end_date.ctime()) # FIXME: TEST
+        move_avg_index = index.ema(n, start_date, end_date).dropna()
+        move_avg_symbol = self.ema(n, start_date, end_date).dropna()
+        if move_avg_symbol.empty or move_avg_index.empty:
+            return pd.Series()
+        move_avg_index /= move_avg_index[0] # normalization
+        move_avg_symbol /= move_avg_symbol[0] # normalization
         diff = move_avg_symbol - move_avg_index
-        return diff.sum()/len(diff) # normalization
+        return diff
 
-    def sma_stats(self, index=None):
+    def diverge_stats(self, index=None):
         """
-        Calculate Simple Moving Average related stats.
+        Calculate stats of divergence to S&P 500.
 
         index: a Symbol class of index, e.g. S&P 500.
         """
         if index == None:
             index = Symbol('^GSPC', name='SP500') # S&P500
             index.get_quotes() # only quotes needed
-        labels = ['Symbol', 'Half-Year SMA Diff '+index.name, '1-Year SMA Diff '+index.name, '2-Year SMA Diff '+index.name, '3-Year SMA Diff '+index.name, '5-Year SMA Diff '+index.name]
+        labels = ['Symbol', 'Half-Year Diverge '+index.name, '1-Year Diverge '+index.name, '2-Year Diverge '+index.name, '3-Year Diverge '+index.name, 'Yearly Diverge '+index.name]
         [end_date, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
-        half_year_sma_diff = self.sma_diff_to_index(index, start=half_year_ago, end=end_date)
-        one_year_sma_diff = self.sma_diff_to_index(index, start=one_year_ago, end=end_date)
-        two_year_sma_diff = self.sma_diff_to_index(index, start=two_year_ago, end=end_date)
-        three_year_sma_diff = self.sma_diff_to_index(index, start=three_year_ago, end=end_date)
-        five_year_sma_diff = self.sma_diff_to_index(index, start=five_year_ago, end=end_date)
-        stats = [[self.sym, half_year_sma_diff, one_year_sma_diff, two_year_sma_diff, three_year_sma_diff, five_year_sma_diff]]
+        half_year_diverge = self.diverge_to_index(index, start=half_year_ago, end=end_date).mean()
+        one_year_diverge = self.diverge_to_index(index, start=one_year_ago, end=end_date).mean()
+        two_year_diverge = self.diverge_to_index(index, start=two_year_ago, end=end_date).mean()
+        three_year_diverge = self.diverge_to_index(index, start=three_year_ago, end=end_date).mean()
+
+        yearly_diverge = 0.0
+        start_date = max(self.quotes.first_valid_index().date(), index.quotes.first_valid_index().date())
+        days = pd.date_range(end=end_date, periods=6, freq='365D')[::-1] # The past 5 years in reverse order
+        for i in range(1, len(days)):
+            if days[i].date() < start_date:
+                break # out of boundary
+            #print('yearly: %s - %s' %(days[i].ctime(), days[i-1].ctime()))  # FIXME: TEST
+            diff = self.diverge_to_index(index, start=days[i], end=days[i-1])
+            if not diff.empty:
+                yearly_diverge += diff.mean()
+            else:
+                break
+        yearly_diverge /= i
+
+        stats = [[self.sym, half_year_diverge, one_year_diverge, two_year_diverge, three_year_diverge, yearly_diverge]]
         stats_df = DataFrame(stats, columns=labels)
         stats_df = stats_df.drop_duplicates()
         stats_df = stats_df.set_index('Symbol')
         return stats_df
 
-    def mma(self, values, n=14):
+    def trend_stats(self):
         """
-        Modified Moving Average(MMA)
+        Get all the technical details of trend.
         """
-        #TODO
-        # quotes.loc[pd.date_range(start=quotes.index[0], periods=5)].dropna().mean()
-        return ((n-1)*values[0]+values[1])/n
+        if self.quotes.empty:
+            self.get_quotes()
+        if self.quotes.empty:
+            print('Error: %s: history quotes are not available.' %self.sym)
+            return DataFrame()
+        end_date = dt.date.today()
+        start_date = end_date - dt.timedelta(days=90)
+        labels = ['Symbol', 'ROC', 'ROC Trend 7D', 'ROC Trend 14D', 'RSI', 'MACD Diff', 'FSTO', 'SSTO']
 
-    def rsi(self):
-        """
-        Relative Strenth Index(RSI)
-        """
-        #TODO
-        return
+        roc = self.roc(start=start_date, end=end_date)
+        if roc.empty or len(roc) < 1:
+            roc_stat = np.nan
+        else:
+            roc_stat = roc[-1]
 
-    def get_stats(self, index=None):
+        rsi = self.rsi(start=start_date, end=end_date)
+        if rsi.empty or len(rsi) < 1:
+            rsi_stat = np.nan
+        else:
+            rsi_stat = rsi[-1]
+
+        [macd, signal, diff] = self.macd(start=start_date, end=end_date)
+        if diff.empty or len(diff) < 1:
+            macd_stat = np.nan
+        else:
+            macd_stat = diff[-1]
+
+        [K,D] = self.stochastic(start=start_date, end=end_date)
+        if K.empty or len(K) < 1:
+            fsto_stat = np.nan
+        else:
+            fsto_stat = K[-1]
+        if D.empty or len(D) < 1:
+            ssto_stat = np.nan
+        else:
+            ssto_stat = D[-1]
+
+        # ROC Trend
+        seven_days_ago = end_date - dt.timedelta(days=7)
+        forteen_days_ago = end_date - dt.timedelta(days=14)
+        roc_trend_7d = find_trend(roc[seven_days_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')])
+        roc_trend_14d = find_trend(roc[forteen_days_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')])
+
+        stats = [[self.sym, roc_stat, roc_trend_7d, roc_trend_14d, rsi_stat, macd_stat, fsto_stat, ssto_stat]]
+        stats_df = DataFrame(stats, columns=labels)
+        stats_df = stats_df.drop_duplicates()
+        stats_df = stats_df.set_index('Symbol')
+        return stats_df
+
+    def get_stats(self, index=None, info=DataFrame()):
         """
         Calculate all stats.
+        index: Symbol of index
+        info: basic info about this symbol, e.g.
+
+                Name                  Sector                             Industry
+        Symbol                                                                   
+        NKE     Nike  consumer_discretionary  apparel,_accessories_&_luxury_goods
+
+        where the 'Symbol' must be the index. 
         """
-        # Add symbol name
-        self.stats = get_symbol_names([self.sym]) # reset stats
+        if self.quotes.empty:
+            self.get_quotes()
+        if not info.empty:
+            # Use basic info
+            self.stats = info
+        else:
+            # Add symbol name
+            self.stats = get_symbol_names([self.sym])
 
         # Yahoo Finance statistics - it must be downloaded before other stats
         basic_stats = get_symbol_yahoo_stats([self.sym])
@@ -466,12 +649,267 @@ class Symbol:
         add_stats = self.get_additional_stats()
         self.stats = self.stats.join(add_stats)
 
-        # SMA stats
-        sma_stats = self.sma_stats(index)
-        self.stats = self.stats.join(sma_stats)
+        # diverge to index stats
+        diverge_stats = self.diverge_stats(index)
+        self.stats = self.stats.join(diverge_stats)
+
+        # trend & momentum
+        trend_stats = self.trend_stats()
+        self.stats = self.stats.join(trend_stats)
 
         return self.stats
 
+
+    ### Momentum ###
+    def momentum(self, n=2, start=None, end=None):
+        """
+        Momentum, defined as
+            Momentum = Today's closing price - Closing price X days ago
+        Return - pandas Series of price differences
+        """
+        if self.quotes.empty:
+            self.get_quotes()
+        if self.quotes.empty:
+            return pd.Series()
+        [start_date, end_date] = self._handle_start_end_dates(start, end)
+        stock = self.quotes["Adj Close"] # calc momentum for all hist data
+        calc = lambda x: x[-1] - x[0]
+        m = stock.rolling(window = n, center = False).apply(calc).dropna()
+        return m[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+
+    def roc(self, n=10, start=None, end=None):
+        """
+        Rate of Change(ROC), defined as
+            ROC = ((current value / previous value) - 1) x 100
+        Return - pandas Series with dates as index.
+        """
+        if self.quotes.empty:
+            self.get_quotes()
+        if self.quotes.empty:
+            return pd.Series()
+        [start_date, end_date] = self._handle_start_end_dates(start, end)
+        stock = self.quotes["Adj Close"]
+        calc = lambda x: (x[-1]/x[0] - 1) * 100
+        rates = stock.rolling(window = n, center = False).apply(calc).dropna()
+        return rates[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+
+    def macd(self, start=None, end=None):
+        """
+        Moving Average Convergence/Divergence(MACD)
+
+        The MACD indicator (or "oscillator") is a collection of three time series calculated
+        from historical price data: the MACD series proper, the "signal" or "average" series,
+        and the "divergence" series which is the difference between the two. 
+        
+        The most commonly used values are 12, 26, and 9 days, that is, MACD(12,26,9):
+            MACD Line = (12-period EMA – 26-period EMA)
+            Signal Line = 9-period EMA
+            Histogram = MACD Line – Signal Line
+
+        Return: list of [MACD Line, Signal Line, Histogram], all in pandas Series format.
+        """
+        [start_date, end_date] = self._handle_start_end_dates(start, end)
+        rng = pd.date_range(start=start_date, end=end_date, freq='D')
+        fastema = self.ema(n=12)
+        slowema = self.ema(n=26)
+        macdline = fastema-slowema
+        macdline = macdline.dropna()
+        signal = pd.Series(moving_average(macdline, n=9, type='exponential'), index=macdline.index)
+        hist = macdline-signal
+        return [macdline[rng].dropna(), signal[rng].dropna(), hist[rng].dropna()]
+
+    def rsi(self, n=14, start=None, end=None):
+        """
+        Relative Strenth Index(RSI)
+
+        Return a Pandas Series of RSI.
+
+        The standard algorithm of calculating RSI is:
+                          100
+            RSI = 100 - --------
+                         1 + RS
+            RS = Average Gain / Average Loss
+
+            The very first calculations for average gain and average loss are simple 14 period averages.
+            
+            First Average Gain = Sum of Gains over the past 14 periods / 14.
+            First Average Loss = Sum of Losses over the past 14 periods / 14.
+
+            The second, and subsequent, calculations are based on the prior averages and the current gain loss:
+            
+            Average Gain = [(previous Average Gain) x 13 + current Gain] / 14.
+            Average Loss = [(previous Average Loss) x 13 + current Loss] / 14.
+        """
+        if self.quotes.empty:
+            self.get_quotes()
+        if self.quotes.empty:
+            return pd.Series()
+
+        # RSI is start date sensitive
+        [start_date, end_date] = self._handle_start_end_dates(start, end)
+        tmp_start = start_date - BDay(n) # The first n days are used for init, so go back for n business days
+        prices = self.quotes['Adj Close'][tmp_start.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+        m = np.diff(prices)
+
+        # initialization
+        seed = m[:n+1] # cause the diff is 1 shorter
+        up = seed[seed>=0].sum()/n
+        down = -seed[seed<0].sum()/n # losses should be positive
+        rsi = np.zeros_like(prices)
+        rsi[:n] = 100. - 100./(1. + up/down)
+
+        # subsequent calculations
+        for i in np.arange(n, len(prices)):
+            d = m[i-1]
+            if d > 0:
+                gain = d
+                loss = 0
+            else:
+                gain = 0
+                loss = -d  # losses should be positive
+            up = (up*(n - 1) + gain)/n
+            down = (down*(n - 1) + loss)/n
+            rsi[i] = 100. - 100/(1. + up/down)
+
+        rsi = pd.Series(rsi, index=prices.index) # price diff drops the fist date
+        return rsi[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
+
+    def stochastic(self, nK=14, nD=3, start=None, end=None):
+        """
+        Stochastic Oscillator
+
+        Inputs:
+            nK - window of fast stochastic oscillator %K
+            nD - window of slow stochastic oscillator %D
+        Return both fast and slow stochastic oscillators, as Pandas Series.
+
+        They are calculated by:
+            Stochastic Oscillator(%K) = (Close Price - Lowest Low) / (Highest High - Lowest Low) * 100
+            Fast %D = 3-day SMA of %K
+            Slow %D = 3-day SMA of fast %D
+        where typical values for N are 5, 9, or 14 periods.
+        """
+        if self.quotes.empty:
+            self.get_quotes()
+        if self.quotes.empty:
+            return [pd.Series(), pd.Series()]
+
+        close = self.quotes['Adj Close']
+        if len(close) <= nK:
+            return [pd.Series(), pd.Series()]
+
+        ratio = self.quotes['Adj Close'] / self.quotes['Close']
+        high = self.quotes['High'] * ratio # adjusted high
+        low = self.quotes['Low'] * ratio   # adjusted low
+
+        sto = np.zeros_like(close)
+        for i in np.arange(nK, len(close)+1):
+            s = close[i-nK : i]
+            h = high[i-nK : i]
+            l = low[i-nK : i]
+            sto[i-1] = (s[-1]-min(l))/(max(h)-min(l)) * 100
+        sto[:nK-1] = sto[nK-1]
+        K = pd.Series(sto, index=close.index)
+        D = pd.Series(moving_average(K, n=nD, type='simple'), index=K.index)
+
+        [start_date, end_date] = self._handle_start_end_dates(start, end)
+        rng = pd.date_range(start=start_date, end=end_date, freq='D')
+        return [K[rng].dropna(), D[rng].dropna()]
+
+    def plot(self, start=None, end=None):
+        """
+        Plot price changes and related indicators.
+        """
+        [start_date, end_date] = self._handle_start_end_dates(start, end)
+        if self.name != None:
+            ticker = self.name
+        else:
+            ticker = self.sym
+
+        fillcolor_gold = 'darkgoldenrod'
+        fillcolor_red = 'lightsalmon'
+        fillcolor_green = 'lightgreen'
+        nrows = 6
+        fig,ax=plt.subplots(nrows,1,sharex=True)
+
+        # plot price, volume and EMA
+        ema10 = self.ema(n=10, start=start_date, end=end_date)
+        ema30 = self.ema(n=30, start=start_date, end=end_date)
+        price = self.quotes['Adj Close'][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+
+        ax_ema = plt.subplot(nrows, 1, (1,2))
+        ax_ema.fill_between(np.asarray(price.index), price.min(), np.asarray(price), facecolor='lightskyblue', linewidth=0.0)
+        ema10.plot(grid=True, label='EMA(10)', color='red')
+        ema30.plot(grid=True, label='EMA(30)', color='darkgreen')
+        plt.legend(fontsize='xx-small', loc='upper left')
+        ax_ema.set_ylim(bottom=price.min()) # change bottom scale
+        ax_ema.set_ylabel('Price')
+        ax_ema.set_xticklabels([]) # hide x-axis labels
+
+        # plot ROC
+        window = 10
+        roc = self.roc(n=window, start=start_date, end=end_date)
+
+        ax_roc = plt.subplot(nrows, 1, 3)
+        roc.plot(grid=True, label='ROC(%d)'%window)
+        bottom, top = ax_roc.get_ylim()
+        ax_roc.set_yticks(np.round(np.linspace(bottom, top, num=4), decimals=0)) # reduce y-axis ticks
+        if top >= 0 and bottom <= 0:
+            ax_roc.axhline(0, color=fillcolor_gold)
+        plt.legend(fontsize='xx-small', loc='upper left')
+        ax_roc.set_ylabel('ROC')
+        ax_roc.set_xticklabels([]) # hide x-axis labels
+
+        # plot RSI
+        window = 14
+        rsi = self.rsi(n=window, start=start_date, end=end_date)
+
+        ax_rsi = plt.subplot(nrows, 1, 4)
+        rsi.plot(grid=True, label='RSI(%d)'%window)
+        ax_rsi.set_ylim(0, 100)
+        bottom, top = ax_rsi.get_ylim()
+        ax_rsi.set_yticks(np.round(np.linspace(bottom, top, num=4), decimals=0)) # reduce y-axis ticks
+        ax_rsi.fill_between(np.asarray(rsi.index), 70, 100, facecolor=fillcolor_red, alpha=0.5, linewidth=0.0)
+        ax_rsi.fill_between(np.asarray(rsi.index), 0, 30, facecolor=fillcolor_green, alpha=0.5, linewidth=0.0)
+        plt.legend(fontsize='xx-small', loc='upper left')
+        ax_rsi.set_ylabel('RSI')
+        ax_rsi.set_xticklabels([]) # hide x-axis labels
+
+        # plot MACD
+        [macd, signal, hist] = self.macd(start=start_date, end=end_date)
+        ax_macd = plt.subplot(nrows, 1, 5)
+        ax_macd.bar(np.asarray(hist.index), np.asarray(hist), width=0.1, color=fillcolor_gold)
+        ax_macd.fill_between(np.asarray(hist.index), np.asarray(hist), 0, facecolor=fillcolor_gold, edgecolor=fillcolor_gold)
+        macd.plot(grid=True, label='MACD(12,26)', color='red')
+        signal.plot(grid=True, label='EMA(9)', color='darkgreen')
+        plt.legend(fontsize='xx-small', loc='upper left')
+        bottom, top = ax_macd.get_ylim()
+        if top >= 0 and bottom <= 0:
+            ax_roc.axhline(0, color=fillcolor_gold)
+        ax_macd.set_yticks(np.round(np.linspace(bottom, top, num=4), decimals=1)) # reduce y-axis ticks
+        ax_macd.set_ylabel('MACD')
+        ax_macd.set_xticklabels([]) # hide x-axis labels
+
+        # plot Stochastic Oscilator
+        n_k = 14
+        n_d = 3
+        K,D = self.stochastic(nK=n_k, nD=n_d, start=start_date, end=end_date)
+        ax_sto = plt.subplot(nrows, 1, 6)
+        K.plot(grid=True, label='%'+'K(%d)'%n_k, color='red')
+        D.plot(grid=True, label='%'+'D(%d)'%n_d, color='darkgreen')
+        bottom, top = ax_sto.get_ylim()
+        ax_sto.set_yticks(np.round(np.linspace(bottom, top, num=4), decimals=0)) # reduce y-axis ticks
+        ax_sto.fill_between(np.asarray(K.index), 80, 100, facecolor=fillcolor_red, alpha=0.5, linewidth=0.0)
+        ax_sto.fill_between(np.asarray(K.index), 0, 20, facecolor=fillcolor_green, alpha=0.5, linewidth=0.0)
+        plt.legend(fontsize='xx-small', loc='upper left')
+        ax_sto.set_ylabel('FSTO')
+
+        fig.suptitle(ticker)
+        fig.autofmt_xdate()
+        fig.show()
+        return
+
+    ### Insider Trade ###
     def get_insider_trade(self):
         """
         NOT IMPLEMENTED YET

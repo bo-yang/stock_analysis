@@ -1,3 +1,6 @@
+import multiprocessing as mp
+from multiprocessing.dummy import Pool as ThreadPool
+
 from stock_analysis.symbol import *
 
 class Index(object):
@@ -27,45 +30,98 @@ class Index(object):
         """
         return self.components
 
-    def get_compo_quotes(self, start=None, end=None):
+    # Helper function for parallel-computing
+    def _get_single_compo_stat(self, args):
+        sym = args[0]
+        quote = args[1].dropna() # DataFrame
+        yahoo_stat = args[2]
+        if quote.empty:
+            return DataFrame()
+        print('Processing ' + sym + ' ...') # FIXME: TEST ONLY
+        stock = Symbol(sym, datapath=self.datapath, loaddata=False)
+        stock.quotes = quote
+        if not stock.quotes.empty:
+            stock.stats = yahoo_stat
+            stat = stock.get_additional_stats() # additional stats
+            stat = stat.join(stock.diverge_stats(index=self.sym)) # add columns of SMA stats
+            stat = stat.join(stock.trend_stats())
+        else:
+            print('Appending empty stats for ' + sym)
+            stat = DataFrame()
+        return stat
+
+    def _get_compo_stats(self, pquotes, yahoo_stats):
         """
-        Download history quotes from Yahoo Finance.
-        Return Pandas Panel in the format like
-            <class 'pandas.core.panel.Panel'>
-            Dimensions: 6 (items) x 4281 (major_axis) x 6 (minor_axis)
-            Items axis: Open to Adj Close
-            Major_axis axis: 2000-01-03 00:00:00 to 2017-01-06 00:00:00
-            Minor_axis axis: AAPL to NVDA
+        pquotes: Pandas Panel of stocks' quotes from DataReader.
         """
-        [start_date, end_date] = parse_start_end_date(start, end)
-        if self.components.empty:
-            self.components = self.get_compo_list()
-        sym_list = self.components.index.tolist()
-        return web.DataReader(sym_list, "yahoo", start_date, end_date)
+        # calc additional stats
+        add_stats = DataFrame()
+        num_cores = mp.cpu_count()
+        pool = ThreadPool(num_cores)
+        args = [(sym, pquotes[sym], yahoo_stats.loc[sym].to_frame().transpose()) for sym in pquotes.items]
+        stats = pool.map(self._get_single_compo_stat, args)
+        for s in stats:
+            add_stats = add_stats.append(s)
+        return add_stats
+
+    def _get_chunk_stats(self, args):
+        """
+        Internal function to process stocks in batch.
+        """
+        iStart = args[0]
+        iEnd = args[1]
+        [start_date, end_date] = parse_start_end_date(None, None)
+        print('Chunk %d - %d' %(iStart, iEnd)) # FIXME: TEST ONLY
+        tmp_stats = self.components[iStart:iEnd]
+        sym_list = self.components[iStart:iEnd].index.tolist()
+        pquotes = web.DataReader(sym_list, "yahoo", start_date, end_date)
+        # items - symbols; major_axis - time; minor_axis - Open to Adj Close
+        pquotes = pquotes.transpose(2,1,0)
+        if len(pquotes.items) == 0:
+            print('Error: failed to get history quotes for chunk  %d - %d.' %(iStart, iEnd))
+            return DataFrame()
+        print('# chunk symbols %d' %len(pquotes.items)) # FIXME: TEST ONLY
+        yahoo_stats = get_symbol_yahoo_stats(pquotes.items.tolist())
+        if yahoo_stats.empty:
+            time.sleep(2)
+            yahoo_stats = get_symbol_yahoo_stats(pquotes.items.tolist()) # try again
+        if yahoo_stats.empty:
+            print('Error: failed to download yahoo stats for chunk %d - %d.' %(iStart, iEnd))
+            return DataFrame()
+        add_stats = self._get_compo_stats(pquotes, yahoo_stats)
+        tmp_stats = tmp_stats.join(add_stats)
+        tmp_stats = tmp_stats.join(yahoo_stats)
+        return tmp_stats
 
     def get_stats(self, save=True):
         """
-        Calculate all components' statistics.
+        Calculate all components' statistics in batch.
         """
+        [start_date, end_date] = parse_start_end_date(None, None)
         self.components = DataFrame() # reset data
+        self.get_compo_list()
         if self.sym.quotes.empty:
             self.sym.get_quotes()
-        tquotes = self.get_compo_quotes()
-        # items - symbols; major_axis - time; minor_axis - Open to Adj Close
-        tquotes = tquotes.transpose(2,1,0)
-        yahoo_stats = get_symbol_yahoo_stats(tquotes.items.tolist())
-        # calc additional stats
-        add_stats = DataFrame()
-        for sym in tquotes.items:
-            print('Processing ' + sym + '...') # FIXME: TEST ONLY
-            stock = Symbol(sym, datapath=self.datapath, loaddata=False)
-            stock.quotes = tquotes[sym].dropna()
-            stock.stats = yahoo_stats.loc[sym].to_frame().transpose()
-            stat = stock.get_additional_stats() # additional stats
-            stat = stat.join(stock.sma_stats(index=self.sym)) # add columns of SMA stats
-            add_stats = add_stats.append(stat)
-        self.components = self.components.join(add_stats)
-        self.components = self.components.join(yahoo_stats)
+
+        chunk = 300 # len(SP500) == 505
+        if len(self.components) <= chunk:
+            args = (0,len(self.components))
+            self.components = self._get_chunk_stats(args)
+            return self.components
+
+        # multiprocessing - process stocks chunk-by-chunk
+        num_chunks = int(np.ceil(len(self.components)/chunk))
+        num_procs = min(mp.cpu_count(), num_chunks)
+        pool = mp.Pool(processes=num_procs)
+        steps = np.round(np.linspace(0, len(self.components), num_chunks)).astype(int)
+        args = [(steps[i-1], steps[i]) for i in range(1,len(steps))]
+        stats = pool.map(self._get_chunk_stats, args)
+
+        chunk_stats = DataFrame()
+        for s in stats:
+            chunk_stats = chunk_stats.append(s)
+        self.components = chunk_stats
+
         if save and not self.components.empty:
             self.save_data()
         return self.components
@@ -99,7 +155,7 @@ class Index(object):
             row = list()
             idx = round(len(symbols)/2)
             for col in symbols.columns:
-                if col == 'Name' or col == 'Sub Industry':
+                if col == 'Name' or col == 'Industry':
                     row.append(symbols.sort_values('1-Year Return').ix[idx][col]) # this is a trick
                 elif col == 'Sector':
                     row.append(sec)
@@ -120,11 +176,11 @@ class Index(object):
         columns: str, list or dict. By default all given columns will be sorted by descending order.
                  To specify different orders for different columns, a dict can be used.
         For example:
-            columns = {'Price In 52-week Range':True, '1-Year Return':False, '1-Year SMA Diff SP500':False}
+            columns = {'Price In 52-week Range':True, '1-Year Return':False, '1-Year Diverge SP500':False}
         where 'True' means ascending=True, and 'False' means ascending=False.
         """
         if n <= 0:
-            n = len(self.components)/2
+            n = int(len(self.components)/2)
         if n <= 0:
             print('Error: components empty, run get_stats() first.')
             return None
@@ -184,11 +240,11 @@ def get_index_components_from_wiki(link, params):
         link:   url to the wiki page.
         params: a dict of <label:column_idx> - keys are labels to be used in the DataFrame,
              and values are the indices of columns in table. The following keys are needed:
-                ['Symbol', 'Name', 'Sector', 'Sub Industry']
+                ['Symbol', 'Name', 'Sector', 'Industry']
     
     Return a DataFrame of the index.
     """
-    tags = ['Symbol', 'Name', 'Sector', 'Sub Industry']
+    tags = ['Symbol', 'Name', 'Sector', 'Industry']
     page = urlopen(link)
     soup = BeautifulSoup(page, 'html.parser')
     table = soup.find('table', {'class': 'wikitable sortable'})
@@ -207,8 +263,8 @@ def get_index_components_from_wiki(link, params):
                 sector = str(col[params['Sector']].string.strip()).lower().replace(' ', '_')
             else:
                 sector = 'n/a'
-            if col[params['Sub Industry']].string != None:
-                sub_industry = str(col[params['Sub Industry']].string.strip()).lower().replace(' ', '_')
+            if col[params['Industry']].string != None:
+                sub_industry = str(col[params['Industry']].string.strip()).lower().replace(' ', '_')
             else:
                 sub_industry = 'n/a'
             st.append([symbol, name, sector, sub_industry])
@@ -231,7 +287,7 @@ class SP500(Index):
         Ticker symbol	| Security | SEC filings | GICS Sector | GICS Sub Industry | Address of Headquarters | Date first added | CIK
         """
         link = "http://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        params={'Symbol':0, 'Name':1, 'Sector':3, 'Sub Industry':4}
+        params={'Symbol':0, 'Name':1, 'Sector':3, 'Industry':4}
         self.components = get_index_components_from_wiki(link, params)
         return self.components
 
@@ -249,7 +305,7 @@ class SP400(Index):
         Ticker Symbol | Company | GICS Economic Sector | GICS Sub-Industry | SEC Filings
         """
         link = "http://en.wikipedia.org/wiki/List_of_S%26P_400_companies"
-        params={'Symbol':0, 'Name':1, 'Sector':2, 'Sub Industry':3}
+        params={'Symbol':0, 'Name':1, 'Sector':2, 'Industry':3}
         self.components = get_index_components_from_wiki(link, params)
         return self.components
 
@@ -259,14 +315,14 @@ class DJIA(Index):
     Dow Jones Industrial Average
     """
     def __init__(self, datapath='./data', loaddata=False):
-        super(self.__class__, self).__init__(sym='^DJI', name='Dow Jones Industrial Average', datapath=datapath, loaddata=loaddata)
+        super(self.__class__, self).__init__(sym='^DJI', name='DowJones', datapath=datapath, loaddata=loaddata)
 
     def get_compo_list(self):
         """
         Company | Exchange | Symbol | Industry | Date Added  | Notes
         """
         link = 'https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average'
-        params={'Symbol':2, 'Name':0, 'Sector':3, 'Sub Industry':3}
+        params={'Symbol':2, 'Name':0, 'Sector':3, 'Industry':3}
         self.components = get_index_components_from_wiki(link, params)
         return self.components
 
@@ -290,12 +346,67 @@ class NASDAQ(Index):
         super(self.__class__, self).__init__(sym='^IXIC', name='NASDAQ', datapath=datapath, loaddata=loaddata)
 
     def get_compo_list(self):
+        if not os.path.isdir(self.datapath):
+            os.makedirs(self.datapath)
         link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NASDAQ&render=download'
-        companylist = self.datapath + 'companylist.csv'
+        companylist = self.datapath + '/companylist.csv'
         response = urlopen(link)
         nasdaq=response.read()
         with open(companylist,'wb') as output:
-            output.write(nasdaq)
+            output.write(nasdaq) # save csv file
         self.components = self.components.from_csv(companylist)
-        # TODO: only keep Symbol, Name, Sector, Industry
+
+        # delete columns
+        self.components.drop('LastSale', axis=1, inplace=True)
+        self.components.drop('MarketCap', axis=1, inplace=True)
+        self.components.drop('ADR TSO', axis=1, inplace=True)
+        self.components.drop('IPOyear', axis=1, inplace=True)
+        self.components.dropna(axis=1, inplace=True)
+
+        # remove unwanted chars from Symbol
+        symbols = [''] * len(self.components)
+        for i in range(0, len(self.components)):
+            symbols[i] = self.components.index[i].strip()
+        symbols = pd.Series(symbols, name='Symbol')
+        self.components.reset_index(inplace=True)
+        self.components.drop('Symbol', axis=1, inplace=True)
+        self.components = self.components.join(symbols)
+        self.components.set_index('Symbol', inplace=True)
         return self.components
+
+class NYSE(Index):
+    """
+    NYSE
+    """
+    def __init__(self, datapath='./data', loaddata=False):
+        super(self.__class__, self).__init__(sym='^GSPC', name='NYSE', datapath=datapath, loaddata=loaddata)
+
+    def get_compo_list(self):
+        if not os.path.isdir(self.datapath):
+            os.makedirs(self.datapath)
+        link = 'http://www.nasdaq.com/screening/companies-by-name.aspx?letter=0&exchange=nyse&render=download'
+        companylist = self.datapath + '/companylist.csv'
+        response = urlopen(link)
+        nasdaq=response.read()
+        with open(companylist,'wb') as output:
+            output.write(nasdaq) # save csv file
+        self.components = self.components.from_csv(companylist)
+
+        # delete columns
+        self.components.drop('LastSale', axis=1, inplace=True)
+        self.components.drop('MarketCap', axis=1, inplace=True)
+        self.components.drop('ADR TSO', axis=1, inplace=True)
+        self.components.drop('IPOyear', axis=1, inplace=True)
+        self.components.dropna(axis=1, inplace=True)
+
+        # remove unwanted chars from Symbol
+        symbols = [''] * len(self.components)
+        for i in range(0, len(self.components)):
+            symbols[i] = self.components.index[i].strip()
+        symbols = pd.Series(symbols, name='Symbol')
+        self.components.reset_index(inplace=True)
+        self.components.drop('Symbol', axis=1, inplace=True)
+        self.components = self.components.join(symbols)
+        self.components.set_index('Symbol', inplace=True)
+        return self.components
+
