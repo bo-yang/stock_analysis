@@ -42,7 +42,7 @@ class Index(object):
         stock.quotes = quote
         if not stock.quotes.empty:
             stock.stats = yahoo_stat
-            stat = stock.get_additional_stats() # additional stats
+            stat = stock.get_additional_stats(exclude_dividend=True) # additional stats
             stat = stat.join(stock.diverge_stats(index=self.sym)) # add columns of SMA stats
             stat = stat.join(stock.trend_stats())
         else:
@@ -58,7 +58,12 @@ class Index(object):
         add_stats = DataFrame()
         num_cores = mp.cpu_count()
         pool = ThreadPool(num_cores)
-        args = [(sym, pquotes[sym], yahoo_stats.loc[sym].to_frame().transpose()) for sym in pquotes.items]
+        args = [] # a list of 3-tuples
+        for sym in pquotes.items:
+            if sym in yahoo_stats.index:
+                args.append( (sym, pquotes[sym], yahoo_stats.loc[sym].to_frame().transpose()) )
+            else:
+                args.append( (sym, pquotes[sym], DataFrame()) )
         stats = pool.map(self._get_single_compo_stat, args)
         for s in stats:
             add_stats = add_stats.append(s)
@@ -177,6 +182,8 @@ class Index(object):
                  To specify different orders for different columns, a dict can be used.
         For example:
             columns = {'Price In 52-week Range':True, '1-Year Return':False, '1-Year Diverge SP500':False}
+            columns={'1-Year Return':False, 'Median Quarterly Return':False, 'Price In 52-week Range':True}
+            columns={'Avg Quarterly Return':False, 'Median Quarterly Return':False, 'Price In 52-week Range':True}
         where 'True' means ascending=True, and 'False' means ascending=False.
         """
         if n <= 0:
@@ -296,8 +303,8 @@ class SP400(Index):
     S&P 400 index
     """
     def __init__(self, datapath='./data', loaddata=False):
-        super(self.__class__, self).__init__(sym='^SP400', name='SP400', datapath=datapath, loaddata=loaddata)
-        self.sym.get_quotes(sym='^GSPC') # use SP500 as a reference
+        super(self.__class__, self).__init__(sym='^GSPC', name='SP400', datapath=datapath, loaddata=loaddata)
+        #self.sym.get_quotes(sym='^GSPC') # use SP500 as a reference
 
     def get_compo_list(self):
         """
@@ -348,12 +355,32 @@ class NASDAQ(Index):
     def get_compo_list(self):
         if not os.path.isdir(self.datapath):
             os.makedirs(self.datapath)
+        companylist = self.datapath + '/companylist.csv'
+
+        # Exchange NASDAQ
+        f = open(companylist,'wb')
         link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NASDAQ&render=download'
-        companylist = self.datapath + '/companylist.csv'
         response = urlopen(link)
         nasdaq=response.read()
-        with open(companylist,'wb') as output:
-            output.write(nasdaq) # save csv file
+        f.write(nasdaq) # save csv file
+        f.close()
+
+        # Exchange NYSE
+        f = open(companylist,'ab')
+        link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NYSE&render=download'
+        response = urlopen(link)
+        nyse=response.read()
+        f.write(nyse) # save csv file
+        f.close()
+
+        # Exchange AMC
+        f = open(companylist,'ab')
+        link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=AMC&render=download'
+        response = urlopen(link)
+        amc=response.read()
+        f.write(amc) # save csv file
+        f.close()
+
         self.components = self.components.from_csv(companylist)
 
         # delete columns
@@ -372,41 +399,7 @@ class NASDAQ(Index):
         self.components.drop('Symbol', axis=1, inplace=True)
         self.components = self.components.join(symbols)
         self.components.set_index('Symbol', inplace=True)
-        return self.components
+        self.components = self.components.drop_duplicates()
 
-class NYSE(Index):
-    """
-    NYSE
-    """
-    def __init__(self, datapath='./data', loaddata=False):
-        super(self.__class__, self).__init__(sym='^GSPC', name='NYSE', datapath=datapath, loaddata=loaddata)
-
-    def get_compo_list(self):
-        if not os.path.isdir(self.datapath):
-            os.makedirs(self.datapath)
-        link = 'http://www.nasdaq.com/screening/companies-by-name.aspx?letter=0&exchange=nyse&render=download'
-        companylist = self.datapath + '/companylist.csv'
-        response = urlopen(link)
-        nasdaq=response.read()
-        with open(companylist,'wb') as output:
-            output.write(nasdaq) # save csv file
-        self.components = self.components.from_csv(companylist)
-
-        # delete columns
-        self.components.drop('LastSale', axis=1, inplace=True)
-        self.components.drop('MarketCap', axis=1, inplace=True)
-        self.components.drop('ADR TSO', axis=1, inplace=True)
-        self.components.drop('IPOyear', axis=1, inplace=True)
-        self.components.dropna(axis=1, inplace=True)
-
-        # remove unwanted chars from Symbol
-        symbols = [''] * len(self.components)
-        for i in range(0, len(self.components)):
-            symbols[i] = self.components.index[i].strip()
-        symbols = pd.Series(symbols, name='Symbol')
-        self.components.reset_index(inplace=True)
-        self.components.drop('Symbol', axis=1, inplace=True)
-        self.components = self.components.join(symbols)
-        self.components.set_index('Symbol', inplace=True)
         return self.components
 

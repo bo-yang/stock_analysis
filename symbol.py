@@ -429,11 +429,39 @@ class Symbol:
         roi = (adj_close[-1] - adj_close[0] + dividend) / adj_close[0]
         return roi
 
+    def return_periodic(self, periods=6, freq='365D'):
+        """
+        Calculate periodic average/median returns.
+
+        periods and freq are parameters passed to Pandas date_range().
+        """
+        if self.quotes.empty:
+            self.get_quotes()
+        if self.quotes.empty:
+            return [np.nan, np.nan]
+        returns = []
+        start_date = self.quotes.first_valid_index().date()
+        end_date = self.quotes.last_valid_index().date()
+        days = pd.date_range(end=end_date, periods=periods, freq=freq)[::-1] # The past (periods-1) periods in reverse order
+        for i in range(1, len(days)):
+            if days[i].date() < start_date:
+                break # out of boundary
+            #print('yearly: %s - %s' %(days[i].ctime(), days[i-1].ctime()))  # FIXME: TEST
+            returns.append(self.return_on_investment(days[i], days[i-1], exclude_dividend=True))
+        if len(returns) > 0:
+            ret_avg = np.mean(returns)
+            ret_median = np.median(returns)
+        else:
+            print('Error: %s: failed to calculate periodic(%s) returns.' %(self.sym, freq))
+            ret_avg = np.nan
+            ret_median = np.nan
+        return [ret_avg, ret_median]
+
     def get_additional_stats(self, exclude_dividend=False):
         """
         Additional stats that calculated based on history price.
         """
-        labels = ['Symbol', 'Last-Quarter Return', 'Half-Year Return', '1-Year Return', '2-Year Return', '3-Year Return', '5-Year Return', 'Yearly Return', 'Price In 52-week Range']
+        labels = ['Symbol', 'Last-Quarter Return', 'Half-Year Return', '1-Year Return', '2-Year Return', '3-Year Return', 'Avg Quarterly Return', 'Median Quarterly Return', 'Avg Yearly Return', 'Median Yearly Return', 'Price In 52-week Range']
         if self.quotes.empty:
             self.get_quotes()
         if self.quotes.empty:
@@ -449,17 +477,9 @@ class Symbol:
         one_year_return = self.return_on_investment(one_year_ago, end_date, exclude_dividend)
         two_year_return = self.return_on_investment(two_year_ago, end_date, exclude_dividend)
         three_year_return = self.return_on_investment(three_year_ago, end_date, exclude_dividend)
-        five_year_return = self.return_on_investment(five_year_ago, end_date, exclude_dividend)
 
-        yearly_return = 0.0
-        start_date = self.quotes.first_valid_index().date()
-        days = pd.date_range(end=end_date, periods=6, freq='365D')[::-1] # The past 5 years in reverse order
-        for i in range(1, len(days)):
-            if days[i].date() < start_date:
-                break # out of boundary
-            #print('yearly: %s - %s' %(days[i].ctime(), days[i-1].ctime()))  # FIXME: TEST
-            yearly_return += self.return_on_investment(days[i], days[i-1], exclude_dividend)
-        yearly_return /= i
+        [yearly_ret_avg, yearly_ret_median] = self.return_periodic(periods=6, freq='365D') # yearly returns in the past 5 years
+        [quart_ret_avg, quarty_ret_median] = self.return_periodic(periods=13, freq='90D') # yearly returns in the past 3 years
 
         adj_close = self.quotes.loc[one_year_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close'].dropna()
         if not adj_close.empty and len(adj_close) > 0:
@@ -469,7 +489,7 @@ class Symbol:
         else:
             pos_in_range = 0
 
-        st = [[self.sym, quarter_return, half_year_return, one_year_return, two_year_return, three_year_return, five_year_return, yearly_return, pos_in_range]]
+        st = [[self.sym, quarter_return, half_year_return, one_year_return, two_year_return, three_year_return, quart_ret_avg, quarty_ret_median, yearly_ret_avg, yearly_ret_median, pos_in_range]]
         stats = DataFrame(st, columns=labels)
         stats = stats.drop_duplicates()
         stats = stats.set_index('Symbol')
@@ -646,7 +666,7 @@ class Symbol:
         self.exch = self.stats['Exchange'][self.sym]
 
         # Add additional stats
-        add_stats = self.get_additional_stats()
+        add_stats = self.get_additional_stats(exclude_dividend=False)
         self.stats = self.stats.join(add_stats)
 
         # diverge to index stats
@@ -657,7 +677,7 @@ class Symbol:
         trend_stats = self.trend_stats()
         self.stats = self.stats.join(trend_stats)
 
-        return self.stats
+        return self.stats.transpose() # transpose for the sake of display
 
 
     ### Momentum ###
@@ -820,7 +840,12 @@ class Symbol:
         """
         Plot price changes and related indicators.
         """
-        [start_date, end_date] = self._handle_start_end_dates(start, end)
+        if start == None and end == None:
+            # set default range to 180 days
+            end_date = dt.datetime.today().date()
+            start_date = end_date - dt.timedelta(days=180)
+        else:
+            [start_date, end_date] = self._handle_start_end_dates(start, end)
         if self.name != None:
             ticker = self.name
         else:
