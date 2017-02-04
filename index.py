@@ -1,7 +1,8 @@
+from stock_analysis.utils import *
+from stock_analysis.symbol import *
+
 import multiprocessing as mp
 from multiprocessing.dummy import Pool as ThreadPool
-
-from stock_analysis.symbol import *
 
 class Index(object):
     """
@@ -38,13 +39,14 @@ class Index(object):
         if quote.empty:
             return DataFrame()
         print('Processing ' + sym + ' ...') # FIXME: TEST ONLY
-        stock = Symbol(sym, datapath=self.datapath, loaddata=False)
+        stock = Symbol(sym, datapath=self.datapath+'/../', loaddata=False)
         stock.quotes = quote
         if not stock.quotes.empty:
             stock.stats = yahoo_stat
             stat = stock.get_additional_stats(exclude_dividend=True) # additional stats
             stat = stat.join(stock.diverge_stats(index=self.sym)) # add columns of SMA stats
             stat = stat.join(stock.trend_stats())
+            stat = stat.join(stock.financial_stats(update=False))
         else:
             print('Appending empty stats for ' + sym)
             stat = DataFrame()
@@ -85,7 +87,7 @@ class Index(object):
         if len(pquotes.items) == 0:
             print('Error: failed to get history quotes for chunk  %d - %d.' %(iStart, iEnd))
             return DataFrame()
-        print('# chunk symbols %d' %len(pquotes.items)) # FIXME: TEST ONLY
+        print('Total # of symbols in this chunk: %d' %len(pquotes.items)) # FIXME: TEST ONLY
         yahoo_stats = get_symbol_yahoo_stats(pquotes.items.tolist())
         if yahoo_stats.empty:
             time.sleep(2)
@@ -98,7 +100,7 @@ class Index(object):
         tmp_stats = tmp_stats.join(yahoo_stats)
         return tmp_stats
 
-    def get_stats(self, save=True):
+    def get_stats(self, save=True, chunk=256):
         """
         Calculate all components' statistics in batch.
         """
@@ -108,7 +110,6 @@ class Index(object):
         if self.sym.quotes.empty:
             self.sym.get_quotes()
 
-        chunk = 300 # len(SP500) == 505
         if len(self.components) <= chunk:
             args = (0,len(self.components))
             self.components = self._get_chunk_stats(args)
@@ -127,9 +128,30 @@ class Index(object):
             chunk_stats = chunk_stats.append(s)
         self.components = chunk_stats
 
+        # Replace inf by NaN
+        self.components.replace([np.inf, -np.inf], np.nan, inplace=True)
+
         if save and not self.components.empty:
             self.save_data()
         return self.components
+
+    def get_financials(self):
+        """
+        Download financial data for all stocks.
+        """
+        if self.components.empty:
+            self.get_compo_list()
+        exch = None
+        if self.name == 'NASDAQ':
+            exch = 'NASDAQ'
+        browser=webdriver.Chrome()
+        for sym in self.components.index:
+            print('Downloading financial data for ' + sym) # FIXME: TEST ONLY
+            stock = Symbol(sym)
+            stock.get_financials(exchange=exch, browser=browser)
+            stock.save_financial_data()
+        browser.close()
+        return
 
     def get_sector(self, sector):
         """
@@ -145,35 +167,64 @@ class Index(object):
         symbols = self.components.where(m, np.nan)
         return symbols.dropna(axis=0, how='all') # drop all NaN rows
 
-    def get_sector_medians(self, saveto=None):
+    def sector_top(self, percent=0.6, saveto=None):
         """
-        Calculate industry medians for each column.
+        Calculate the sector top performance of each column.
+
+        percent: percentage of top, [0-1]
+        saveto: save to file
         """
         if self.components.empty:
             self.get_stats()
-        medians = list()
+        tops = list()
         all_sectors = self.components['Sector'].drop_duplicates()
         for sec in all_sectors:
             symbols = self.get_sector(sec)
             if symbols.empty:
                 continue
             row = list()
-            idx = round(len(symbols)/2)
             for col in symbols.columns:
                 if col == 'Name' or col == 'Industry':
-                    row.append(symbols.sort_values('1-Year Return').ix[idx][col]) # this is a trick
+                    column = symbols['1-Year Return'].dropna() # this is a trick
                 elif col == 'Sector':
                     row.append(sec)
+                    continue
                 else:
-                    row.append(symbols.sort_values(col).ix[idx][col])
-            medians.append(row) # each sector
-        medians_df = DataFrame(medians, columns=self.components.columns)
-        medians_df = medians_df.set_index('Sector')
-        if saveto != None and len(medians) > 0:
-            medians_df.to_csv(saveto)
-        return medians_df
+                    column = symbols[col].dropna()
+                if column.empty:
+                    row.append(np.nan)
+                    continue
+                idx = int(np.floor(len(column) * percent)) # sort ascendingly
+                if idx == len(column):
+                    idx = -1 # last element
+                row.append(column.sort_values(ascending=True)[idx])
+            tops.append(row) # each sector
 
-    def find_top_components(self, columns, n=-1, saveto=None):
+        tops_df = DataFrame(tops, columns=self.components.columns)
+        tops_df = tops_df.set_index('Sector')
+        if saveto != None and not tops_df.empty:
+            f = os.path.normpath(self.datapath + '/' + saveto)
+            tops_df.to_csv(f)
+        return tops_df
+
+    def compare(self, stocks, columns=None):
+        """
+        Compare stocks using given attributes.
+
+        stocks: a list of stock tickers
+        columns: a list of attributes to be compared
+        """
+        if type(stocks) != list:
+            print('Error: a list of tickers is expected.')
+            return
+        if columns == None:
+            return self.components.loc[stocks].transpose()
+        if type(columns) != list:
+            print('Error: a list of attribute is expected.')
+            return
+        return self.components.loc[stocks, columns].transpose()
+
+    def filter(self, columns, n=-1, saveto=None):
         """
         Find out the common top n components according to the given columns(str, list or dict).
 
@@ -181,9 +232,9 @@ class Index(object):
         columns: str, list or dict. By default all given columns will be sorted by descending order.
                  To specify different orders for different columns, a dict can be used.
         For example:
-            columns = {'Price In 52-week Range':True, '1-Year Return':False, '1-Year Diverge SP500':False}
-            columns={'1-Year Return':False, 'Median Quarterly Return':False, 'Price In 52-week Range':True}
-            columns={'Avg Quarterly Return':False, 'Median Quarterly Return':False, 'Price In 52-week Range':True}
+            cheap={'1-Year Return':False, 'Avg Quarterly Return':False, 'Price In 52-week Range':True}
+            reliable={'Median Quarterly Return':False, 'Avg Quarterly Return':False, 'Yearly Diverge SP500':False, 'Price In 52-week Range':True}
+            buy={'Avg Quarterly Return':False, 'Median Quarterly Return':False, 'Price In 52-week Range':True, 'Avg FSTO Past-Month':True}
         where 'True' means ascending=True, and 'False' means ascending=False.
         """
         if n <= 0:
@@ -217,7 +268,8 @@ class Index(object):
                 return None # Nothing in common
             common = pd.indexes.base.Index(common_list)
         if saveto != None and len(common) > 0:
-            self.components.loc[common].to_csv(saveto)
+            f = os.path.normpath(self.datapath + '/' + saveto)
+            self.components.loc[common].to_csv(f)
         return self.components.loc[common] # DataFrame of common stocks
 
     def load_data(self, from_file=True):

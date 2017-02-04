@@ -1,75 +1,9 @@
-import os
-import re
-import pandas as pd
-import numpy as np
-import datetime as dt
-import time
-
-#conda install -c https://conda.anaconda.org/anaconda pandas-datareader
-import pandas_datareader.data as web
-import pandas_datareader as pdr
-from pandas import DataFrame
-from pandas.tseries.offsets import BDay # business days
-from pandas_datareader._utils import RemoteDataError
-from pandas.io.common import urlopen
-from bs4 import BeautifulSoup
-
-# matplotlib
-import matplotlib.pyplot as plt
+from stock_analysis.utils import *
 
 # conda install -c conda-forge selenium=3.0.1
 from selenium import webdriver
 
-# Exchange symbols:
-#   NMS = NasdaqGS; NGM = NasdagGM; NCM = NasdaqCM; ASE = AMEX; NYQ = NYSE;
-#   GER = XETRA; FRA = Frankfurt; PNK = Other OTC; LSE = LSE
-EXCH_SYM_TO_STR = {'NMS':'NASDAQ', 'NGM':'NASDAQ', 'NCM':'NASDAQ', 'NYQ':'NYSE', 'ASE':'AMEX',
-                   'GER':'XETRA', 'FRA': 'FRA', 'LSE':'LSE'}
-DEFAULT_START_DATE = '2000-01-01'
-
-def get_exchange_by_sym(sym):
-    if sym in EXCH_SYM_TO_STR.keys():
-        return EXCH_SYM_TO_STR[sym]
-    else:
-        return 'NYSE'
-
-def parse_start_end_date(start, end):
-    """
-    Convert input date time to datetime.date.
-    """
-    if start == None:
-        start = DEFAULT_START_DATE
-    if type(start) == str:
-        start_date = pd.to_datetime(start).date()
-    elif type(start) == pd.tslib.Timestamp:
-        start_date = start.date()
-    else:
-        start_date = start
-    if end != None:
-        if type(end) == str:
-            end_date = pd.to_datetime(end).date()
-        elif type(end) == pd.tslib.Timestamp:
-            end_date = end.date()
-        else:
-            end_date = end
-    else:
-        end_date = dt.datetime.today().date()
-    return [start_date, end_date]
-
-def get_stats_intervals(end=None):
-    if end == None:
-        end_date = dt.date.today()
-    else:
-        end_date = end
-    three_month_ago = end_date - dt.timedelta(days=90)
-    half_year_ago = end_date - dt.timedelta(days=180)
-    one_year_ago = end_date - dt.timedelta(days=365)
-    two_year_ago = end_date - dt.timedelta(days=365*2)
-    three_year_ago = end_date - dt.timedelta(days=365*3)
-    five_year_ago = end_date - dt.timedelta(days=365*5)
-    return [end_date, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago]
-
-def _parse_google_financial_table(tables, keyword=None):
+def parse_google_financial_table(tables, keyword=None):
     """
     Parse Google Financial table into DataFrame.
     tables - selenium.webdriver.remote.webelement.WebElement
@@ -84,7 +18,7 @@ def _parse_google_financial_table(tables, keyword=None):
             tbl = t
             break
     if tbl == None:
-        return None
+        return DataFrame()
 
     lines = tbl.text.strip().splitlines()
     # Get quaters from the first row, e.g.
@@ -102,150 +36,6 @@ def _parse_google_financial_table(tables, keyword=None):
     fin_df = fin_df.drop_duplicates()
     fin_df = fin_df.set_index('Entries')
     return fin_df
-
-def convert_string_to_list(symbols):
-    """
-    Convert different types of symbols into list.
-    For the input symbols string, multiple symbols can be concatenated by '+', e.g. 'AAPL+NKE+^GSPC'
-    """
-    if type(symbols) == list:
-        return symbols
-    elif type(symbols) == pd.core.series.Series:
-        return symbols.tolist()
-    elif type(symbols) == str:
-        # Support multiple symbols separated by '+', e.g. 'AAPL+NKE+^GSPC'
-        return symbols.split('+')
-    else:
-        print("ERROR: unsupported input type %s" %type(symbols))
-        return None
-
-def get_symbol_names(symbols):
-    """
-    Get a list of symbols' names from Yahoo Finance.
-    In case comma is in the symbol's name, download it separately.
-    """
-    sym_list = convert_string_to_list(symbols)
-    if sym_list == None:
-        return None
-
-    url_str = 'http://download.finance.yahoo.com/d/quotes.csv?'
-    # Form a BUNCH of STOCK SYMBOLS separated by "+",
-    # e.g. XOM+BBDb.TO+JNJ+MSFT
-    sym_str = '+'.join(sym_list)
-    url_str += 's=' + sym_str
-
-    tags = {'s':'Symbol', 'n':'Name'}
-    url_str += '&f=' + ''.join(pd.compat.iterkeys(tags))
-    with urlopen(url_str) as resp:
-        raw = resp.read()
-    lines = raw.decode('utf-8').strip().split('\n')
-    """
-    Examples:
-        '"YUM","Yum! Brands, Inc."',
-        '"ZBH","Zimmer Biomet Holdings, Inc. Co"',
-        '"ZION","Zions Bancorporation"',
-        '"ZTS","Zoetis Inc. Class A Common Stoc"']
-    """
-    lines = [line.strip().strip('"').replace('",', '').split('"') for line in lines]
-    symnames = DataFrame(lines, columns=list(tags.values()))
-    symnames = symnames.drop_duplicates()
-    symnames = symnames.set_index('Symbol')
-    return symnames
-
-def get_symbol_yahoo_stats(symbols):
-    """
-    Get the symbols' basic statistics from Yahoo Finance.
-    Input:
-       symbols - a list of symbol strings, e.g. ['AAPL']
-    Output: stats in Pandas DataFrame.
-    This function is ported from pandas_datareader/yahoo/components.py
-    """
-    sym_list = convert_string_to_list(symbols)
-    if sym_list == None:
-        return None
-
-    url_str = 'http://download.finance.yahoo.com/d/quotes.csv?'
-    # Form a BUNCH of STOCK SYMBOLS separated by "+",
-    # e.g. XOM+BBDb.TO+JNJ+MSFT
-    sym_str = '+'.join(sym_list)
-    url_str += 's=' + sym_str
-    url_str = url_str.strip().replace(' ','') # remove all spaces
-
-    # Yahoo Finance tags, refer to http://www.financialwisdomforum.org/gummy-stuff/Yahoo-data.htm
-    tags = {'s':'Symbol', 'x':'Exchange', 'j1':'Market Cap', 'b4':'Book Value', 'r':'P/E', 'p5':'Price/Sales',
-            'p6':'Price/Book', 'j4':'EBITDA', 'j':'52-week Low', 'k':'52-week High', 'l1':'Last Trade',
-            'd':'Dividend/Share', 'y':'Dividend Yield', 'e':'EPS', 's7':'Short Ratio', 's1':'Shares Owned',
-            'f6':'Float Shares'}
-    url_str += '&f=' + ''.join(pd.compat.iterkeys(tags))
-    with urlopen(url_str) as resp:
-        raw = resp.read()
-    lines = raw.decode('utf-8').strip().replace('"', '').split('\n')
-    lines = [line.strip().split(',') for line in lines]
-    if len(lines) < 1 or len(lines[0]) < len(tags) :
-        print('Error: failed to download Yahoo stats from %s' %url_str)
-        return DataFrame()
-    stats = DataFrame(lines, columns=list(tags.values()))
-    stats = stats.drop_duplicates()
-    stats = stats.set_index('Symbol')
-    return stats
-
-def moving_average(x, n=10, type='simple'):
-    """
-    Calculate simple/exponential moving average.
-
-    Inputs:
-        x - list, Numpy array, Pandas Series
-        n - window of the moving average
-        type - 'simple' or 'exponential'
-    Return: pandas Series with the same length as input x.
-
-    Exponential Moving Average(EMA), calculated by
-        SMA: 10 period sum / 10 
-        Multiplier: (2 / (Time periods + 1) ) = (2 / (10 + 1) ) = 0.1818 (18.18%)
-        EMA: {Close - EMA(previous day)} x multiplier + EMA(previous day).
-    """
-    x = np.asarray(x)
-    if type == 'simple':
-        # SMA
-        w = np.ones(n)
-        w /= w.sum() # weights
-        avg = np.convolve(x, w, mode='full')[:len(x)]
-        avg[:n] = avg[n]
-    else:
-        # EMA
-        avg = np.zeros_like(x)
-        avg[:n] = x[:n].mean() # initialization
-        m = 2/(n+1) # multiplier
-        for i in np.arange(n,len(x)):
-            avg[i] = (x[i] - avg[i-1]) * m + avg[i-1]
-    return avg
-
-def find_trend(y):
-    """
-    Find the trend of input data.
-
-    Input: array-like numbers
-    Return: slope for line or 0 for turnaround
-    """
-    y = np.asarray(y)
-    if len(y) < 4:
-        return 0
-    x = np.arange(len(y))
-
-    # line-fitting the first and second half data - if the slopes are both positive or negative,
-    # then these data can be fitted by a line. Otherwise, this is a turn over.
-    mid = int(len(y)/2)
-    y1 = y[:mid]
-    y2 = y[mid:]
-    x1 = np.arange(len(y1))
-    x2 = np.arange(len(y2))
-    p1 = np.polyfit(x1, y1, 1)
-    p2 = np.polyfit(x2, y2, 1)
-    if (p1[0] > 0 and p2[0] < 0) or (p1[0] < 0 and p2[0] > 0):
-        return 0 # turnaround
-    # these data can be fitted by a line
-    p = np.polyfit(x,y,1)
-    return p[0]
 
 class Symbol:
     """
@@ -302,13 +92,20 @@ class Symbol:
         self.start_date = self.quotes.first_valid_index().date() # update start date
         return self.quotes
 
-    def get_financials(self, browser=None):
+    def get_financials(self, exchange=None, browser=None):
         """
         Download financial data from Google Finance.
         The financial data are stored in *reversed* time order from left to right.
         """
+        if exchange == None:
+            if self.exch == None:
+                if 'Exchange' in self.stats.columns:
+                    self.exch = self.stats['Exchange'][self.sym]
+                else:
+                    self.get_stats() # get exchange from Yahoo Finance
+            exchange = get_exchange_by_sym(self.exch)
         # e.g. https://www.google.com/finance?q=NYSE%3ACRM&fstype=ii
-        site='https://www.google.com/finance?q=' + get_exchange_by_sym(self.exch) + '%3A' + self.sym + '&fstype=ii'
+        site='https://www.google.com/finance?q=' + exchange + '%3A' + self.sym + '&fstype=ii'
 
         close_browser = False
         if browser == None:
@@ -319,10 +116,12 @@ class Symbol:
         browser.get(site)
         tables=browser.find_elements_by_id('fs-table')
         if len(tables) < 1:
-            print('Error: %s: failed to find income statement.' %self.sym)
+            print('Error: %s: failed to find income statement, exchange %s.' %(self.sym, exchange))
+            if close_browser:
+                browser.close()
+            return
         else:
-            self.income = _parse_google_financial_table(tables, 'Revenue')
-        # TODO: combine new income with hist income
+            self.income = parse_google_financial_table(tables, 'Revenue')
 
         # Balance Sheet
         link=browser.find_element_by_link_text('Balance Sheet')
@@ -331,9 +130,11 @@ class Symbol:
         tables=browser.find_elements_by_id('fs-table')
         if len(tables) < 1:
             print('Error: %s: failed to find balance sheet.' %self.sym)
+            if close_browser:
+                browser.close()
+            return
         else:
-            self.balance = _parse_google_financial_table(tables, 'Total Assets')
-        # TODO: combine new balance with hist income
+            self.balance = parse_google_financial_table(tables, 'Total Assets')
 
         # Cash Flow
         link=browser.find_element_by_link_text('Cash Flow')
@@ -341,12 +142,15 @@ class Symbol:
         tables=browser.find_elements_by_id('fs-table')
         if len(tables) < 1:
             print('Error: %s: failed to find cash flow.' %self.sym)
+            if close_browser:
+                browser.close()
+            return
         else:
-            self.cashflow = _parse_google_financial_table(tables, 'Amortization')
-        # TODO: combine new cash flow with hist income
+            self.cashflow = parse_google_financial_table(tables, 'Amortization')
 
         if close_browser:
             browser.close()
+        return
 
     def get_nasdaq_report(self):
         """
@@ -368,7 +172,17 @@ class Symbol:
             if os.path.isfile(self.files['stats']):
                 self.stats = pd.read_csv(self.files['stats'])
                 self.stats = self.stats.set_index('Symbol')
+        else:
+            self.get_quotes()
+            self.get_stats()
+            #self.get_financials()
+        self.load_financial_data(from_file)
 
+    def load_financial_data(self, from_file=True):
+        """
+        Load financial data from file or web.
+        """
+        if from_file:
             if os.path.isfile(self.files['income']):
                 self.income = pd.read_csv(self.files['income'])
                 self.income = self.income.set_index('Entries')
@@ -381,9 +195,7 @@ class Symbol:
                 self.cashflow = pd.read_csv(self.files['cashflow'])
                 self.cashflow = self.cashflow.set_index('Entries')
         else:
-            self.get_quotes()
-            self.get_stats()
-            #self.get_financials()
+            self.get_financials()
 
     def save_data(self):
         """
@@ -394,7 +206,15 @@ class Symbol:
         if len(self.quotes) > 0:
             self.quotes.to_csv(self.files['quotes'])
         if len(self.stats) > 0:
-            self.stats.to_csv(self.files['stats']) 
+            self.stats.to_csv(self.files['stats'])
+        self.save_financial_data()
+
+    def save_financial_data(self):
+        """
+        Save financial data.
+        """
+        if not os.path.isdir(self.datapath):
+            os.makedirs(self.datapath)
         if len(self.income) > 0:
             self.income.to_csv(self.files['income'])
         if len(self.balance) > 0:
@@ -440,8 +260,9 @@ class Symbol:
         if self.quotes.empty:
             return [np.nan, np.nan]
         returns = []
-        start_date = self.quotes.first_valid_index().date()
-        end_date = self.quotes.last_valid_index().date()
+        start_date = self.quotes.first_valid_index()
+        end_date = self.quotes.last_valid_index()
+        [start_date, end_date] = self._handle_start_end_dates(start_date, end_date)
         days = pd.date_range(end=end_date, periods=periods, freq=freq)[::-1] # The past (periods-1) periods in reverse order
         for i in range(1, len(days)):
             if days[i].date() < start_date:
@@ -540,7 +361,6 @@ class Symbol:
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         # use the latest available starting date
         start_date = max(self.quotes.first_valid_index().date(), index.quotes.first_valid_index().date(), start_date)
-        #print('start: '+start_date.ctime()+', end: '+end_date.ctime()) # FIXME: TEST
         move_avg_index = index.ema(n, start_date, end_date).dropna()
         move_avg_symbol = self.ema(n, start_date, end_date).dropna()
         if move_avg_symbol.empty or move_avg_index.empty:
@@ -572,7 +392,6 @@ class Symbol:
         for i in range(1, len(days)):
             if days[i].date() < start_date:
                 break # out of boundary
-            #print('yearly: %s - %s' %(days[i].ctime(), days[i-1].ctime()))  # FIXME: TEST
             diff = self.diverge_to_index(index, start=days[i], end=days[i-1])
             if not diff.empty:
                 yearly_diverge += diff.mean()
@@ -597,7 +416,8 @@ class Symbol:
             return DataFrame()
         end_date = dt.date.today()
         start_date = end_date - dt.timedelta(days=90)
-        labels = ['Symbol', 'ROC', 'ROC Trend 7D', 'ROC Trend 14D', 'RSI', 'MACD Diff', 'FSTO', 'SSTO']
+        one_month_ago = end_date - dt.timedelta(days=30)
+        labels = ['Symbol', 'ROC', 'ROC Trend 7D', 'ROC Trend 14D', 'RSI', 'MACD Diff', 'FSTO', 'SSTO', 'Avg FSTO Past-Month', 'Avg FSTO Past-Quarter']
 
         roc = self.roc(start=start_date, end=end_date)
         if roc.empty or len(roc) < 1:
@@ -620,8 +440,12 @@ class Symbol:
         [K,D] = self.stochastic(start=start_date, end=end_date)
         if K.empty or len(K) < 1:
             fsto_stat = np.nan
+            avg_fsto_past_month = np.nan
+            avg_fsto_past_quarter = np.nan
         else:
             fsto_stat = K[-1]
+            avg_fsto_past_month = K[one_month_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].mean()
+            avg_fsto_past_quarter = K.mean()
         if D.empty or len(D) < 1:
             ssto_stat = np.nan
         else:
@@ -633,7 +457,88 @@ class Symbol:
         roc_trend_7d = find_trend(roc[seven_days_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')])
         roc_trend_14d = find_trend(roc[forteen_days_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')])
 
-        stats = [[self.sym, roc_stat, roc_trend_7d, roc_trend_14d, rsi_stat, macd_stat, fsto_stat, ssto_stat]]
+        stats = [[self.sym, roc_stat, roc_trend_7d, roc_trend_14d, rsi_stat, macd_stat, fsto_stat, ssto_stat, avg_fsto_past_month, avg_fsto_past_quarter]]
+        stats_df = DataFrame(stats, columns=labels)
+        stats_df = stats_df.drop_duplicates()
+        stats_df = stats_df.set_index('Symbol')
+        return stats_df
+
+    def financial_stats(self, exchange=None, browser=None, update=False):
+        """
+        Calculate financial stats.
+
+        exchange: string of stock exchange, e.g. NASDAQ or NYSE
+        browser:  selenium webdriver
+        update: force to update financial data from web
+        """
+        if update: #FIXME: or self.income.empty or self.balance.empty or self.cashflow.empty:
+            self.get_financials(exchange=exchange, browser=browser)
+            self.save_financial_data()
+        else:
+            print('Loading files under %s .' %self.datapath) # FIXME
+            self.load_financial_data()
+
+        labels = ['Symbol', 'Revenue Momentum', 'Profit Margin', 'Avg Profit Margin', 'Profit Margin Momentum', 'Operating Margin', 'Avg Operating Margin', 'Operating Margin Momentum', 'Asset Momentum', 'Debt/Assets', 'Avg Debt/Assets', 'Debt/Assets Momentum', 'Operating Cash Momentum', 'Investing Cash Momentum', 'Financing Cash Momentum']
+
+        net_income = pd.Series()
+        operate_income = pd.Series()
+        revenue = pd.Series()
+        total_assets = pd.Series()
+        total_debt = pd.Series()
+        total_liabilities = pd.Series()
+        total_liab_equity = pd.Series()
+        total_equity = pd.Series()
+        cash_change = pd.Series()
+        cash_operating = pd.Series()
+        cash_investing = pd.Series()
+        cash_financing = pd.Series()
+
+        fmt = lambda y: pd.Series([str(x).replace(',','').replace('-','0') for x in y], index=y.index)[::-1].astype(np.float)
+        if not self.income.empty:
+            if '-' not in self.income.loc['Revenue'].tolist():
+                revenue = fmt(self.income.loc['Revenue'])
+            else:
+                revenue = fmt(self.income.loc['Total Revenue'])
+            net_income = fmt(self.income.loc['Net Income'])
+            operate_income = fmt(self.income.loc['Operating Income'])
+        if not self.balance.empty:
+            total_assets = fmt(self.balance.loc['Total Assets'])
+            total_debt = fmt(self.balance.loc['Total Debt'])
+            total_liabilities = fmt(self.balance.loc['Total Liabilities'])
+            total_liab_equity = fmt(self.balance.loc['Total Liabilities & Shareholders\' Equity'])
+        if not self.cashflow.empty:
+            cash_change = fmt(self.cashflow.loc['Net Change in Cash'])
+            cash_operating = fmt(self.cashflow.loc['Cash from Operating Activities'])
+            cash_investing = fmt(self.cashflow.loc['Cash from Investing Activities'])
+            cash_financing = fmt(self.cashflow.loc['Cash from Financing Activities'])
+
+        if len(revenue) > 0:
+            revenue_momentum = find_trend(revenue, fit_poly=False)
+            profit_margins = net_income / revenue
+            profit_margin_moment = find_trend(profit_margins.dropna(), fit_poly=False)
+            operating_margins = operate_income / revenue
+            operate_margin_moment = find_trend(operating_margins.dropna(), fit_poly=False)
+        else:
+            revenue_momentum = 0
+            profit_margins = np.zeros(4)
+            profit_margin_moment = 0
+            operating_margins = np.zeros(4)
+            operate_margin_moment = 0
+
+        if len(total_assets) > 0:
+            asset_momentum = find_trend(total_assets.dropna(), fit_poly=False)
+            debt_to_assets = total_debt / total_assets
+            debt_assets_moment = find_trend(debt_to_assets.dropna(), fit_poly=False)
+        else:
+            asset_momentum = 0
+            debt_to_assets = np.zeros(4)
+            debt_assets_moment = 0
+
+        cash_operate_moment = find_trend(cash_operating.dropna(), fit_poly=False)
+        cash_invest_moment = find_trend(cash_investing.dropna(), fit_poly=False)
+        cash_finance_moment = find_trend(cash_financing.dropna(), fit_poly=False)
+
+        stats = [[self.sym, revenue_momentum, profit_margins[-1], profit_margins.mean(), profit_margin_moment, operating_margins[-1], operating_margins.mean(), operate_margin_moment, asset_momentum, debt_to_assets[-1], debt_to_assets.mean(), debt_assets_moment, cash_operate_moment, cash_invest_moment, cash_finance_moment]]
         stats_df = DataFrame(stats, columns=labels)
         stats_df = stats_df.drop_duplicates()
         stats_df = stats_df.set_index('Symbol')
@@ -665,7 +570,7 @@ class Symbol:
         self.stats = self.stats.join(basic_stats)
         self.exch = self.stats['Exchange'][self.sym]
 
-        # Add additional stats
+        # additional stats based on history quotes
         add_stats = self.get_additional_stats(exclude_dividend=False)
         self.stats = self.stats.join(add_stats)
 
@@ -676,6 +581,10 @@ class Symbol:
         # trend & momentum
         trend_stats = self.trend_stats()
         self.stats = self.stats.join(trend_stats)
+
+        # financial stats
+        financial_stats = self.financial_stats(exchange=self.exch)
+        self.stats = self.stats.join(financial_stats)
 
         return self.stats.transpose() # transpose for the sake of display
 
