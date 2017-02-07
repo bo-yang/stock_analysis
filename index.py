@@ -45,8 +45,8 @@ class Index(object):
             stock.stats = yahoo_stat
             stat = stock.get_additional_stats(exclude_dividend=True) # additional stats
             stat = stat.join(stock.diverge_stats(index=self.sym)) # add columns of SMA stats
-            stat = stat.join(stock.trend_stats())
             stat = stat.join(stock.financial_stats(update=False))
+            stat = stat.join(stock.trend_stats())
         else:
             print('Appending empty stats for ' + sym)
             stat = DataFrame()
@@ -167,7 +167,7 @@ class Index(object):
         symbols = self.components.where(m, np.nan)
         return symbols.dropna(axis=0, how='all') # drop all NaN rows
 
-    def sector_top(self, percent=0.6, saveto=None):
+    def sector_top(self, percent=0.5, saveto=None):
         """
         Calculate the sector top performance of each column.
 
@@ -213,6 +213,10 @@ class Index(object):
 
         stocks: a list of stock tickers
         columns: a list of attributes to be compared
+
+        For example,
+            columns=sp500.components.columns[3:].tolist()
+            columns=nasdaq.components.columns[4:].tolist()
         """
         if type(stocks) != list:
             print('Error: a list of tickers is expected.')
@@ -232,8 +236,9 @@ class Index(object):
         columns: str, list or dict. By default all given columns will be sorted by descending order.
                  To specify different orders for different columns, a dict can be used.
         For example:
-            cheap={'1-Year Return':False, 'Avg Quarterly Return':False, 'Price In 52-week Range':True}
-            reliable={'Median Quarterly Return':False, 'Avg Quarterly Return':False, 'Yearly Diverge SP500':False, 'Price In 52-week Range':True}
+            cheap={'Avg Quarterly Return':False, 'Last-Quarter Return':True, 'Price In 52-week Range':True}
+            reliable={'Median Quarterly Return':False, 'Avg Quarterly Return':False, 'Median Yearly Return':False, 'Avg Yearly Return':False, 'Yearly Diverge Index':False}
+            reliable=['Half-Year Diverge Index', '1-Year Diverge Index','2-Year Diverge Index', '3-Year Diverge Index','Yearly Diverge Index']
             buy={'Avg Quarterly Return':False, 'Median Quarterly Return':False, 'Price In 52-week Range':True, 'Avg FSTO Past-Month':True}
         where 'True' means ascending=True, and 'False' means ascending=False.
         """

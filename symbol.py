@@ -379,7 +379,7 @@ class Symbol:
         if index == None:
             index = Symbol('^GSPC', name='SP500') # S&P500
             index.get_quotes() # only quotes needed
-        labels = ['Symbol', 'Half-Year Diverge '+index.name, '1-Year Diverge '+index.name, '2-Year Diverge '+index.name, '3-Year Diverge '+index.name, 'Yearly Diverge '+index.name]
+        labels = ['Symbol', 'Half-Year Diverge Index', '1-Year Diverge Index', '2-Year Diverge Index', '3-Year Diverge Index', 'Yearly Diverge Index']
         [end_date, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
         half_year_diverge = self.diverge_to_index(index, start=half_year_ago, end=end_date).mean()
         one_year_diverge = self.diverge_to_index(index, start=one_year_ago, end=end_date).mean()
