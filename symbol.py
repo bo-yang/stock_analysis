@@ -113,7 +113,12 @@ class Symbol:
             close_browser = True
 
         # Income Statement
-        browser.get(site)
+        try:
+            browser.get(site)
+        except TimeoutException:
+            print("Error: failed to get link: %s." %site)
+            browser.close()
+            return 
         tables=browser.find_elements_by_id('fs-table')
         if len(tables) < 1:
             print('Error: %s: failed to find income statement, exchange %s.' %(self.sym, exchange))

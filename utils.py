@@ -82,6 +82,14 @@ def convert_string_to_list(symbols, split='+'):
         print("ERROR: unsupported input type %s" %type(symbols))
         return None
 
+def min_max_norm(x):
+    """
+    Min-Max normalization.
+
+    x: Numpy array or Pandas Series
+    """
+    return (x-x.min()) / (x.max() - x.min())
+
 def get_symbol_names(symbols):
     """
     Get a list of symbols' names from Yahoo Finance.
