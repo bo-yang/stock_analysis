@@ -8,21 +8,15 @@ class Index(object):
     """
     Base class of stock index.
     """
-    def __init__(self, sym, name='Unknown', datapath='./data', loaddata=False):
+    def __init__(self, sym='^GSPC', name='Unknown', datapath='./data', components = DataFrame(), loaddata=False):
         self.name = name        # e.g. SP500
         self.sym = Symbol(sym, name=name, datapath=datapath, loaddata=False) # the index ticker, e.g. '^GSPC'
         self.datapath = os.path.normpath(datapath + '/' + name)
         self.datafile = self.datapath + '/components.csv'
-        self.components = DataFrame() # index 'Symbol'
+        self.components = components # index 'Symbol'
         if loaddata:
             self.sym.get_quotes()
             self.load_data(from_file=True)
-
-    def _string_to_float(self, data):
-        if data == '-' or data.upper() == 'N/A' or data.upper() == 'NA':
-            return data #float(-99999999.99)
-        else:
-            return float(data.replace(',','')) # remove ',' in numbers
 
     def get_compo_list(self):
         """
@@ -35,24 +29,20 @@ class Index(object):
     def _get_single_compo_stat(self, args):
         sym = args[0]
         quote = args[1].dropna() # DataFrame
-        yahoo_stat = args[2]
         if quote.empty:
             return DataFrame()
         print('Processing ' + sym + ' ...') # FIXME: TEST ONLY
         stock = Symbol(sym, datapath=self.datapath+'/../', loaddata=False)
         stock.quotes = quote
         if not stock.quotes.empty:
-            stock.stats = yahoo_stat
-            stat = stock.get_additional_stats(exclude_dividend=True) # additional stats
-            stat = stat.join(stock.diverge_stats(index=self.sym)) # add columns of SMA stats
-            stat = stat.join(stock.financial_stats(update=False))
-            stat = stat.join(stock.trend_stats())
+            stock.get_stats(index=self.sym, exclude_name=True, exclude_dividend=True)
+            stat = stock.stats
         else:
             print('Appending empty stats for ' + sym)
             stat = DataFrame()
         return stat
 
-    def _get_compo_stats(self, pquotes, yahoo_stats):
+    def _get_compo_stats(self, pquotes):
         """
         pquotes: Pandas Panel of stocks' quotes from DataReader.
         """
@@ -60,12 +50,9 @@ class Index(object):
         add_stats = DataFrame()
         num_cores = mp.cpu_count()
         pool = ThreadPool(num_cores)
-        args = [] # a list of 3-tuples
+        args = [] # a list of 2-tuples
         for sym in pquotes.items:
-            if sym in yahoo_stats.index:
-                args.append( (sym, pquotes[sym], yahoo_stats.loc[sym].to_frame().transpose()) )
-            else:
-                args.append( (sym, pquotes[sym], DataFrame()) )
+            args.append( (sym, pquotes[sym]) )
         stats = pool.map(self._get_single_compo_stat, args)
         for s in stats:
             add_stats = add_stats.append(s)
@@ -79,7 +66,7 @@ class Index(object):
         iEnd = args[1]
         [start_date, end_date] = parse_start_end_date(None, None)
         print('Chunk %d - %d' %(iStart, iEnd)) # FIXME: TEST ONLY
-        tmp_stats = self.components[iStart:iEnd]
+        chunk_stats = self.components[iStart:iEnd]
         sym_list = self.components[iStart:iEnd].index.tolist()
         pquotes = web.DataReader(sym_list, "yahoo", start_date, end_date)
         # items - symbols; major_axis - time; minor_axis - Open to Adj Close
@@ -88,17 +75,9 @@ class Index(object):
             print('Error: failed to get history quotes for chunk  %d - %d.' %(iStart, iEnd))
             return DataFrame()
         print('Total # of symbols in this chunk: %d' %len(pquotes.items)) # FIXME: TEST ONLY
-        yahoo_stats = get_symbol_yahoo_stats(pquotes.items.tolist())
-        if yahoo_stats.empty:
-            time.sleep(2)
-            yahoo_stats = get_symbol_yahoo_stats(pquotes.items.tolist()) # try again
-        if yahoo_stats.empty:
-            print('Error: failed to download yahoo stats for chunk %d - %d.' %(iStart, iEnd))
-            return DataFrame()
-        add_stats = self._get_compo_stats(pquotes, yahoo_stats)
-        tmp_stats = tmp_stats.join(add_stats)
-        tmp_stats = tmp_stats.join(yahoo_stats)
-        return tmp_stats
+        add_stats = self._get_compo_stats(pquotes)
+        chunk_stats = chunk_stats.join(add_stats)
+        return chunk_stats
 
     def get_stats(self, save=True, chunk=256):
         """
@@ -185,7 +164,7 @@ class Index(object):
             row = list()
             for col in symbols.columns:
                 if col == 'Name' or col == 'Industry':
-                    column = symbols['1-Year Return'].dropna() # this is a trick
+                    column = symbols['1YearReturn'].dropna() # this is a trick
                 elif col == 'Sector':
                     row.append(sec)
                     continue
@@ -249,7 +228,7 @@ class Index(object):
             return None
 
         if type(columns) == str or type(columns) == list:
-            cols = convert_string_to_list(columns)
+            cols = str2list(columns)
             orders = [False]*len(cols) # by default ascending = False
         elif type(columns) == dict:
             cols = list(columns.keys())
@@ -295,6 +274,42 @@ class Index(object):
         if len(self.components) > 0:
             self.components.to_csv(self.datafile)
         return
+
+def ranking(stocks):
+    """
+    Make a table and compare stocks based on key factors.
+    For each column, the stocks are given a score between [0 - 10], and the total scores are computed for each column.
+
+    stocks: Pandas DataFrame of stock stats or Index
+    """
+    if type(stocks) == pd.DataFrame:
+        symbols = stocks
+    else:
+        print('Error: ranking: unsupported type %s' %type(stocks))
+        return DataFrame()
+
+    # True - the larger the better, False - the smaller the better
+    tags = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'RevenueMomentum':True, 'ProfitMarginMomentum':True, 'EPSGrowth':True, 'PEG':False, 'Forward P/E':False} #, 'PriceIn52weekRange':False}
+    table = DataFrame()
+    for t in tags.keys():
+        maxrange = symbols[t].max() - symbols[t].min()
+        symbols[t].replace(np.nan, maxrange/2, inplace=True) # replace NaN with mean
+        if tags[t]:
+            # the larger the better
+            col = np.round((symbols[t] - symbols[t].min()) / maxrange * 10)
+        else:
+            # the smaller the better
+            col = np.round((symbols[t].max() - symbols[t]) / maxrange * 10)
+        if table.empty:
+            table = table.append(col).transpose()
+        else:
+            table = table.join(col)
+
+    total = pd.Series(table.transpose().sum(), name='Total', index=table.index)
+    table = table.join(total)
+    table.sort_values('Total', ascending=False, inplace=True)
+
+    return table
 
 
 def get_index_components_from_wiki(link, params):

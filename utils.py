@@ -14,6 +14,8 @@ from pandas_datareader._utils import RemoteDataError
 from pandas.io.common import urlopen
 from bs4 import BeautifulSoup
 
+from yahoo_finance import Share
+
 # matplotlib
 import matplotlib.pyplot as plt
 
@@ -66,7 +68,7 @@ def get_stats_intervals(end=None):
     five_year_ago = end_date - dt.timedelta(days=365*5)
     return [end_date, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago]
 
-def convert_string_to_list(symbols, split='+'):
+def str2list(symbols, split='+'):
     """
     Convert different types of symbols into list.
     For the input symbols string, multiple symbols can be concatenated by '+', e.g. 'AAPL+NKE+^GSPC'
@@ -82,20 +84,55 @@ def convert_string_to_list(symbols, split='+'):
         print("ERROR: unsupported input type %s" %type(symbols))
         return None
 
+def str2num(s, m2b=False):
+    """
+    Convert financial data from string to integer/float number.
+
+    s: input string
+    m2b: convert Million('M') to Billion('B')
+
+    Example:
+        '-1.2031%' => -0.012031
+        '21,065,937' => 21065937
+        '158.86B' => 158.86
+        '158.86M' => 0.15886
+    """
+    if s == None or len(s) == 0:
+        return np.nan
+    if type(s) == int or type(s) == float:
+        return s
+    if type(s) != str:
+        print('Error: str2num: inavlid input.')
+        return np.nan
+    if s == '-' or s.upper() == 'N/A' or s.upper() == 'NA':
+        return np.nan
+    s = s.upper()
+    factor = 1.0
+    if s[0] == '-':
+        factor *= -1
+    if s[-1] == '%':
+        factor /= 100
+    elif s[-1] == 'M' and m2b:
+        factor /= 1000 # million to billion
+    elif s[-1] == 'B' and not m2b:
+        factor *= 1000 # billion to million
+    num = s.replace(',','').replace('-','').replace('+','').replace('%','').replace('M','').replace('B','')
+    return float(num)*factor
+
 def min_max_norm(x):
     """
     Min-Max normalization.
 
     x: Numpy array or Pandas Series
     """
-    return (x-x.min()) / (x.max() - x.min())
+    return (x-x.min()) / (x.max()-x.min())
 
 def get_symbol_names(symbols):
     """
     Get a list of symbols' names from Yahoo Finance.
     In case comma is in the symbol's name, download it separately.
     """
-    sym_list = convert_string_to_list(symbols)
+    sym_list = str2list(symbols)
     if sym_list == None:
         return None
 
@@ -123,7 +160,7 @@ def get_symbol_names(symbols):
     symnames = symnames.set_index('Symbol')
     return symnames
 
-def get_symbol_yahoo_stats(symbols):
+def get_symbol_yahoo_stats_url(symbols):
     """
     Get the symbols' basic statistics from Yahoo Finance.
     Input:
@@ -131,9 +168,9 @@ def get_symbol_yahoo_stats(symbols):
     Output: stats in Pandas DataFrame.
     This function is ported from pandas_datareader/yahoo/components.py
     """
-    sym_list = convert_string_to_list(symbols)
+    sym_list = str2list(symbols)
     if sym_list == None:
-        return None
+        return DataFrame()
 
     url_str = 'http://download.finance.yahoo.com/d/quotes.csv?'
     # Form a BUNCH of STOCK SYMBOLS separated by "+",
@@ -159,6 +196,52 @@ def get_symbol_yahoo_stats(symbols):
     stats = stats.drop_duplicates()
     stats = stats.set_index('Symbol')
     return stats
+
+def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
+    """
+    Get the symbols' basic statistics from Yahoo Finance.
+    Input:
+       symbols - a list of symbol strings, e.g. ['AAPL']
+    Output: stats in Pandas DataFrame.
+    This function is ported from pandas_datareader/yahoo/components.py
+    """
+    sym_list = str2list(symbols)
+    if sym_list == None:
+        return DataFrame()
+
+    # Yahoo Finance tags, refer to http://www.financialwisdomforum.org/gummy-stuff/Yahoo-data.htm
+    tags = ['Symbol']
+    if not exclude_name:
+        tags += ['Name']
+    tags += ['Exchange', 'MarketCap', 'Volume', 'AverageDailyVolume', 'BookValue', 'P/E', 'PEG', 'Price/Sales',
+            'Price/Book', 'EBITDA', 'EPS', 'EPSEstimateNextQuarter', 'EPSEstimateCurrentYear', 'EPSEstimateNextYear',
+            'OneyrTargetPrice', 'PriceEPSEstimateCurrentYear', 'PriceEPSEstimateNextYear', 'ShortRatio',
+            'Dividend/Share', 'DividendYield', 'DividendPayDate', 'ExDividendDate']
+    lines = []
+    for sym in sym_list:
+        stock = Share(sym)
+        line = [sym]
+        if not exclude_name:
+            line += [stock.get_name()]
+        line += [stock.get_stock_exchange(), str2num(stock.get_market_cap(), m2b=True),
+                str2num(stock.get_volume()), str2num(stock.get_avg_daily_volume()), str2num(stock.get_book_value()),
+                str2num(stock.get_price_earnings_ratio()), str2num(stock.get_price_earnings_growth_ratio()),
+                str2num(stock.get_price_sales()), str2num(stock.get_price_book()), str2num(stock.get_ebitda()),
+                str2num(stock.get_earnings_share()), str2num(stock.get_EPS_estimate_next_quarter()),
+                str2num(stock.get_EPS_estimate_current_year()), str2num(stock.get_EPS_estimate_next_year()),
+                str2num(stock.get_one_yr_target_price()), str2num(stock.get_price_EPS_estimate_current_year()),
+                str2num(stock.get_price_EPS_estimate_next_year()), str2num(stock.get_short_ratio()),
+                str2num(stock.get_dividend_share()), str2num(stock.get_dividend_yield()), stock.get_dividend_pay_date(),
+                stock.get_ex_dividend_date()]
+        lines.append(line)
+
+    stats = DataFrame(lines, columns=tags)
+    stats = stats.drop_duplicates()
+    stats = stats.set_index('Symbol')
+    return stats
+
+def get_symbol_yahoo_stats(symbols, exclude_name=False):
+    return get_symbol_yahoo_stats_yql(symbols, exclude_name)
 
 def moving_average(x, n=10, type='simple'):
     """

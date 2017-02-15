@@ -157,12 +157,12 @@ class Symbol:
             browser.close()
         return
 
-    def get_nasdaq_report(self):
+    def get_edgar_report(self):
         """
-        NASDAQ stock report: http://www.nasdaq.com/symbol/nvda
+        EDGAR stock report: http://www.nasdaq.com/symbol/nvda
         """
-        link = 'http://stockreports.nasdaq.edgar-online.com/<sym>.html'
         # TODO: download the data
+        return
 
 
     def load_data(self, from_file=True):
@@ -242,14 +242,14 @@ class Symbol:
         adj_close = self.quotes.loc[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close']
         if self.quotes.empty or len(adj_close) < 1:
             return -99999999
-        no_dividend = ('Dividend Yield' not in self.stats.columns) or (str(self.stats['Dividend Yield'][self.sym]).upper() == 'N/A')
+        no_dividend = ('DividendYield' not in self.stats.columns) or np.isnan(self.stats['DividendYield'][self.sym])
         if exclude_dividend or no_dividend:
             dividend = 0
         else:
             # For simplicity, suppose the dividend yield is calculated as
             #   Dividend Yield = (Annual Dividends Per Share) / (Avg Price Per Share)
             # This is not accurate and need to be enhanced.
-            dividend = float(self.stats['Dividend Yield'][self.sym]) * adj_close.mean() / 100 # yearly dividend
+            dividend = self.stats['DividendYield'][self.sym] * adj_close.mean() / 100 # yearly dividend
             dividend = dividend / 365 * (end_date-start_date).days # dividend in the range
         roi = (adj_close[-1] - adj_close[0] + dividend) / adj_close[0]
         return roi
@@ -283,11 +283,11 @@ class Symbol:
             ret_median = np.nan
         return [ret_avg, ret_median]
 
-    def get_additional_stats(self, exclude_dividend=False):
+    def return_stats(self, exclude_dividend=False):
         """
         Additional stats that calculated based on history price.
         """
-        labels = ['Symbol', 'Last-Quarter Return', 'Half-Year Return', '1-Year Return', '2-Year Return', '3-Year Return', 'Avg Quarterly Return', 'Median Quarterly Return', 'Avg Yearly Return', 'Median Yearly Return', 'Price In 52-week Range']
+        labels = ['Symbol', 'LastQuarterReturn', 'HalfYearReturn', '1YearReturn', '2YearReturn', '3YearReturn', 'AvgQuarterlyReturn', 'MedianQuarterlyReturn', 'AvgYearlyReturn', 'MedianYearlyReturn', 'PriceIn52weekRange']
         if self.quotes.empty:
             self.get_quotes()
         if self.quotes.empty:
@@ -384,7 +384,7 @@ class Symbol:
         if index == None:
             index = Symbol('^GSPC', name='SP500') # S&P500
             index.get_quotes() # only quotes needed
-        labels = ['Symbol', 'Half-Year Diverge Index', '1-Year Diverge Index', '2-Year Diverge Index', '3-Year Diverge Index', 'Yearly Diverge Index']
+        labels = ['Symbol', 'HalfYearDivergeIndex', '1YearDivergeIndex', '2YearDivergeIndex', '3YearDivergeIndex', 'YearlyDivergeIndex']
         [end_date, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
         half_year_diverge = self.diverge_to_index(index, start=half_year_ago, end=end_date).mean()
         one_year_diverge = self.diverge_to_index(index, start=one_year_ago, end=end_date).mean()
@@ -422,7 +422,7 @@ class Symbol:
         end_date = dt.date.today()
         start_date = end_date - dt.timedelta(days=90)
         one_month_ago = end_date - dt.timedelta(days=30)
-        labels = ['Symbol', 'ROC', 'ROC Trend 7D', 'ROC Trend 14D', 'RSI', 'MACD Diff', 'FSTO', 'SSTO', 'Avg FSTO Past-Month', 'Avg FSTO Past-Quarter']
+        labels = ['Symbol', 'ROC', 'ROC Trend 7D', 'ROC Trend 14D', 'RSI', 'MACD Diff', 'FSTO', 'SSTO', 'AvgFSTOLastMonth', 'AvgFSTOLastQuarter']
 
         roc = self.roc(start=start_date, end=end_date)
         if roc.empty or len(roc) < 1:
@@ -483,7 +483,7 @@ class Symbol:
             print('Loading files under %s .' %self.datapath) # FIXME
             self.load_financial_data()
 
-        labels = ['Symbol', 'Revenue Momentum', 'Profit Margin', 'Avg Profit Margin', 'Profit Margin Momentum', 'Operating Margin', 'Avg Operating Margin', 'Operating Margin Momentum', 'Asset Momentum', 'Debt/Assets', 'Avg Debt/Assets', 'Debt/Assets Momentum', 'Operating Cash Momentum', 'Investing Cash Momentum', 'Financing Cash Momentum']
+        labels = ['Symbol', 'RevenueMomentum', 'ProfitMargin', 'AvgProfitMargin', 'ProfitMarginMomentum', 'OperatingMargin', 'AvgOperatingMargin', 'OperatingMarginMomentum', 'AssetMomentum', 'Debt/Assets', 'Avg Debt/Assets', 'Debt/Assets Momentum', 'OperatingCashMomentum', 'InvestingCashMomentum', 'FinancingCashMomentum']
 
         net_income = pd.Series()
         operate_income = pd.Series()
@@ -549,35 +549,40 @@ class Symbol:
         stats_df = stats_df.set_index('Symbol')
         return stats_df
 
-    def get_stats(self, index=None, info=DataFrame()):
+    def additional_stats(self):
         """
-        Calculate all stats.
-        index: Symbol of index
-        info: basic info about this symbol, e.g.
-
-                Name                  Sector                             Industry
-        Symbol                                                                   
-        NKE     Nike  consumer_discretionary  apparel,_accessories_&_luxury_goods
-
-        where the 'Symbol' must be the index. 
+        Additional stats
         """
         if self.quotes.empty:
             self.get_quotes()
-        if not info.empty:
-            # Use basic info
-            self.stats = info
-        else:
-            # Add symbol name
-            self.stats = get_symbol_names([self.sym])
+
+        labels = ['Symbol', 'EPSGrowth', 'Forward P/E']
+        eps_growth = (self.stats['EPSEstimateNextYear'][self.sym] - self.stats['EPSEstimateCurrentYear'][self.sym]) / self.stats['EPSEstimateCurrentYear'][self.sym] * 100 # percent
+        # Forward P/E = (current price / EPS estimate next year)
+        forward_pe = self.quotes['Adj Close'][-1] / self.stats['EPSEstimateNextYear'][self.sym]
+
+        stat = [[self.sym, eps_growth, forward_pe]]
+        stat = DataFrame(stat, columns=labels)
+        stat.drop_duplicates(inplace=True)
+        stat.set_index('Symbol', inplace=True)
+
+        return stat
+
+    def get_stats(self, index=None, exclude_name=False, exclude_dividend=False):
+        """
+        Calculate all stats.
+        index: Symbol of index
+        """
+        if self.quotes.empty:
+            self.get_quotes()
 
         # Yahoo Finance statistics - it must be downloaded before other stats
-        basic_stats = get_symbol_yahoo_stats([self.sym])
-        self.stats = self.stats.join(basic_stats)
+        self.stats = get_symbol_yahoo_stats([self.sym], exclude_name=exclude_name)
         self.exch = self.stats['Exchange'][self.sym]
 
-        # additional stats based on history quotes
-        add_stats = self.get_additional_stats(exclude_dividend=False)
-        self.stats = self.stats.join(add_stats)
+        # stats of return based on history quotes
+        return_stats = self.return_stats(exclude_dividend=exclude_dividend)
+        self.stats = self.stats.join(return_stats)
 
         # diverge to index stats
         diverge_stats = self.diverge_stats(index)
@@ -590,6 +595,10 @@ class Symbol:
         # financial stats
         financial_stats = self.financial_stats(exchange=self.exch)
         self.stats = self.stats.join(financial_stats)
+
+        # additional stats
+        add_stats = self.additional_stats()
+        self.stats = self.stats.join(add_stats)
 
         return self.stats.transpose() # transpose for the sake of display
 
