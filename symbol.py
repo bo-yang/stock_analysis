@@ -227,7 +227,7 @@ class Symbol:
         if len(self.cashflow) > 0:
             self.cashflow.to_csv(self.files['cashflow'])
 
-    def return_on_investment(self, start=None, end=None, exclude_dividend=False):
+    def return_on_investment(self, start=None, end=None, exclude_dividend=True):
         """
         Calculate stock Return On Investiment(ROI, or Rate Of Return) for a given period.
             Total Stock Return = ((P1 - P0) + D) / P0
@@ -283,11 +283,11 @@ class Symbol:
             ret_median = np.nan
         return [ret_avg, ret_median]
 
-    def return_stats(self, exclude_dividend=False):
+    def growth_stats(self, exclude_dividend=False):
         """
         Additional stats that calculated based on history price.
         """
-        labels = ['Symbol', 'LastQuarterReturn', 'HalfYearReturn', '1YearReturn', '2YearReturn', '3YearReturn', 'AvgQuarterlyReturn', 'MedianQuarterlyReturn', 'AvgYearlyReturn', 'MedianYearlyReturn', 'PriceIn52weekRange']
+        labels = ['Symbol', 'LastMonthReturn', 'LastQuarterReturn', 'HalfYearReturn', '1YearReturn', '2YearReturn', '3YearReturn', 'AvgMonthlyReturn', 'MedianMonthlyReturn', 'AvgQuarterlyReturn', 'MedianQuarterlyReturn', 'AvgYearlyReturn', 'MedianYearlyReturn', 'PriceIn52weekRange', 'LastQuarterGrowth', 'LastYearGrowth']
         if self.quotes.empty:
             self.get_quotes()
         if self.quotes.empty:
@@ -296,8 +296,9 @@ class Symbol:
             stats = DataFrame([st.tolist()], columns=labels)
             return stats
 
-        [end_date, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
+        [end_date, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
 
+        last_month_return = self.return_on_investment(one_month_ago, end_date, exclude_dividend)
         quarter_return = self.return_on_investment(three_month_ago, end_date, exclude_dividend)
         half_year_return = self.return_on_investment(half_year_ago, end_date, exclude_dividend)
         one_year_return = self.return_on_investment(one_year_ago, end_date, exclude_dividend)
@@ -305,17 +306,25 @@ class Symbol:
         three_year_return = self.return_on_investment(three_year_ago, end_date, exclude_dividend)
 
         [yearly_ret_avg, yearly_ret_median] = self.return_periodic(periods=6, freq='365D') # yearly returns in the past 5 years
-        [quart_ret_avg, quarty_ret_median] = self.return_periodic(periods=13, freq='90D') # yearly returns in the past 3 years
+        [quart_ret_avg, quart_ret_median] = self.return_periodic(periods=13, freq='90D') # quarterly returns in the past 3 years
+        [monthly_ret_avg, monthly_ret_median] = self.return_periodic(periods=25, freq='30D') #  monthly returns in the past 2 years
 
         adj_close = self.quotes.loc[one_year_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close'].dropna()
         if not adj_close.empty and len(adj_close) > 0:
+            last_year_growth = adj_close[-1] - adj_close[0]
             current = adj_close[-1]
             # Current price in 52-week range should between [0, 1] - larger number means more expensive.
             pos_in_range = (current - adj_close.min()) / (adj_close.max() - adj_close.min())
+            adj_close = self.quotes.loc[three_month_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close'].dropna()
+            last_quarter_growth = adj_close[-1] - adj_close[0]
         else:
-            pos_in_range = 0
+            pos_in_range = np.nan
+            last_year_growth = np.nan
+            last_quarter_growth = np.nan
 
-        st = [[self.sym, quarter_return, half_year_return, one_year_return, two_year_return, three_year_return, quart_ret_avg, quarty_ret_median, yearly_ret_avg, yearly_ret_median, pos_in_range]]
+        st = [[self.sym, last_month_return, quarter_return, half_year_return, one_year_return, two_year_return, three_year_return,
+               monthly_ret_avg, monthly_ret_median, quart_ret_avg, quart_ret_median, yearly_ret_avg, yearly_ret_median, pos_in_range,
+               last_quarter_growth, last_year_growth]]
         stats = DataFrame(st, columns=labels)
         stats = stats.drop_duplicates()
         stats = stats.set_index('Symbol')
@@ -375,7 +384,28 @@ class Symbol:
         diff = move_avg_symbol - move_avg_index
         return diff
 
-    def diverge_stats(self, index=None):
+    def relative_growth(self, index, start=None, end=None):
+        """
+        Percentage of price change relative to the given index.
+        """
+        if self.quotes.empty:
+            self.get_quotes()
+        if index.quotes.empty:
+            index.get_quotes()
+        if self.quotes.empty or index.quotes.empty:
+            return np.nan
+        [start_date, end_date] = self._handle_start_end_dates(start, end)
+        # use the latest available starting date
+        start_date = max(self.quotes.first_valid_index().date(), index.quotes.first_valid_index().date(), start_date)
+        stock_quote = self.quotes['Adj Close'][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
+        index_quote = index.quotes['Adj Close'][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
+        if stock_quote.empty or index_quote.empty:
+            return np.nan
+        stock_growth = stock_quote[-1] / stock_quote[0]
+        index_growth = index_quote[-1] / index_quote[0]
+        return stock_growth / index_growth
+
+    def relative_growth_stats(self, index=None):
         """
         Calculate stats of divergence to S&P 500.
 
@@ -384,8 +414,14 @@ class Symbol:
         if index == None:
             index = Symbol('^GSPC', name='SP500') # S&P500
             index.get_quotes() # only quotes needed
-        labels = ['Symbol', 'HalfYearDivergeIndex', '1YearDivergeIndex', '2YearDivergeIndex', '3YearDivergeIndex', 'YearlyDivergeIndex']
-        [end_date, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
+        labels = ['Symbol', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'LastQuarterDivergeIndex', 'HalfYearDivergeIndex', '1YearDivergeIndex', '2YearDivergeIndex', '3YearDivergeIndex', 'YearlyDivergeIndex']
+        [end_date, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
+        relative_growth_one_month = self.relative_growth(index, start=one_month_ago, end=end_date)
+        relative_growth_last_quarter = self.relative_growth(index, start=three_month_ago, end=end_date)
+        relative_growth_half_year = self.relative_growth(index, start=half_year_ago, end=end_date)
+        relative_growth_last_year = self.relative_growth(index, start=one_year_ago, end=end_date)
+
+        last_quarter_diverge = self.diverge_to_index(index, start=three_month_ago, end=end_date).mean()
         half_year_diverge = self.diverge_to_index(index, start=half_year_ago, end=end_date).mean()
         one_year_diverge = self.diverge_to_index(index, start=one_year_ago, end=end_date).mean()
         two_year_diverge = self.diverge_to_index(index, start=two_year_ago, end=end_date).mean()
@@ -404,7 +440,9 @@ class Symbol:
                 break
         yearly_diverge /= i
 
-        stats = [[self.sym, half_year_diverge, one_year_diverge, two_year_diverge, three_year_diverge, yearly_diverge]]
+        stats = [[self.sym, relative_growth_one_month, relative_growth_last_quarter, relative_growth_half_year,
+                  relative_growth_last_year, last_quarter_diverge, half_year_diverge, one_year_diverge, two_year_diverge,
+                  three_year_diverge, yearly_diverge]]
         stats_df = DataFrame(stats, columns=labels)
         stats_df = stats_df.drop_duplicates()
         stats_df = stats_df.set_index('Symbol')
@@ -480,7 +518,7 @@ class Symbol:
             self.get_financials(exchange=exchange, browser=browser)
             self.save_financial_data()
         else:
-            print('Loading files under %s .' %self.datapath) # FIXME
+            print('Loading financials under %s .' %self.datapath) # FIXME
             self.load_financial_data()
 
         labels = ['Symbol', 'RevenueMomentum', 'ProfitMargin', 'AvgProfitMargin', 'ProfitMarginMomentum', 'OperatingMargin', 'AvgOperatingMargin', 'OperatingMarginMomentum', 'AssetMomentum', 'Debt/Assets', 'Avg Debt/Assets', 'Debt/Assets Momentum', 'OperatingCashMomentum', 'InvestingCashMomentum', 'FinancingCashMomentum']
@@ -498,24 +536,23 @@ class Symbol:
         cash_investing = pd.Series()
         cash_financing = pd.Series()
 
-        fmt = lambda y: pd.Series([str(x).replace(',','').replace('-','0') for x in y], index=y.index)[::-1].astype(np.float)
         if not self.income.empty:
             if '-' not in self.income.loc['Revenue'].tolist():
-                revenue = fmt(self.income.loc['Revenue'])
+                revenue = financial_fmt(self.income.loc['Revenue'])
             else:
-                revenue = fmt(self.income.loc['Total Revenue'])
-            net_income = fmt(self.income.loc['Net Income'])
-            operate_income = fmt(self.income.loc['Operating Income'])
+                revenue = financial_fmt(self.income.loc['Total Revenue'])
+            net_income = financial_fmt(self.income.loc['Net Income'])
+            operate_income = financial_fmt(self.income.loc['Operating Income'])
         if not self.balance.empty:
-            total_assets = fmt(self.balance.loc['Total Assets'])
-            total_debt = fmt(self.balance.loc['Total Debt'])
-            total_liabilities = fmt(self.balance.loc['Total Liabilities'])
-            total_liab_equity = fmt(self.balance.loc['Total Liabilities & Shareholders\' Equity'])
+            total_assets = financial_fmt(self.balance.loc['Total Assets'])
+            total_debt = financial_fmt(self.balance.loc['Total Debt'])
+            total_liabilities = financial_fmt(self.balance.loc['Total Liabilities'])
+            total_liab_equity = financial_fmt(self.balance.loc['Total Liabilities & Shareholders\' Equity'])
         if not self.cashflow.empty:
-            cash_change = fmt(self.cashflow.loc['Net Change in Cash'])
-            cash_operating = fmt(self.cashflow.loc['Cash from Operating Activities'])
-            cash_investing = fmt(self.cashflow.loc['Cash from Investing Activities'])
-            cash_financing = fmt(self.cashflow.loc['Cash from Financing Activities'])
+            cash_change = financial_fmt(self.cashflow.loc['Net Change in Cash'])
+            cash_operating = financial_fmt(self.cashflow.loc['Cash from Operating Activities'])
+            cash_investing = financial_fmt(self.cashflow.loc['Cash from Investing Activities'])
+            cash_financing = financial_fmt(self.cashflow.loc['Cash from Financing Activities'])
 
         if len(revenue) > 0:
             revenue_momentum = find_trend(revenue, fit_poly=False)
@@ -556,12 +593,36 @@ class Symbol:
         if self.quotes.empty:
             self.get_quotes()
 
-        labels = ['Symbol', 'EPSGrowth', 'Forward P/E']
-        eps_growth = (self.stats['EPSEstimateNextYear'][self.sym] - self.stats['EPSEstimateCurrentYear'][self.sym]) / self.stats['EPSEstimateCurrentYear'][self.sym] * 100 # percent
+        labels = ['Symbol', 'EPSGrowth', 'Forward P/E', 'EarningsYield', 'ReturnOnCapital']
+        eps_growth = (self.stats['EPSEstimateCurrentYear'][self.sym] - self.stats['EPS'][self.sym]) / self.stats['EPS'][self.sym] * 100 # percent
         # Forward P/E = (current price / EPS estimate next year)
-        forward_pe = self.quotes['Adj Close'][-1] / self.stats['EPSEstimateNextYear'][self.sym]
+        forward_pe = self.quotes['Adj Close'][-1] / self.stats['EPSEstimateCurrentYear'][self.sym]
 
-        stat = [[self.sym, eps_growth, forward_pe]]
+        # Earnings Yield = (EPS last year) / (Share Price)
+        # TODO: use Greenblatt's updated version:
+        # Earnings Yield = (Earnings Before Interest & Taxes + Depreciation – CapEx) / Enterprise Value (Market Value + Debt – Cash)
+        earnings_yield =  self.stats['EPS'][self.sym] / self.quotes['Adj Close'][-1]
+
+        # Return on capital:
+        #   ROC = (Net Income - Dividends) / InvestedCapital
+        # where,
+        #   InvestedCapital = FixedAssets + IntangibleAssets + CurrentAssets - CurrentLiabilities - Cash
+        if self.income.empty or self.balance.empty or self.cashflow.empty:
+            roc = 0
+        else:
+            roc = 0
+            net_income = financial_fmt(self.income.loc['Net Income'])
+            total_assets = financial_fmt(self.balance.loc['Total Assets'])
+            total_liabilities = financial_fmt(self.balance.loc['Total Liabilities'])
+            #cash_from_operating = financial_fmt(self.cashflow.loc['Cash from Operating Activities'])
+            cash = 0 # TODO: calculate total cash
+            l = min(len(net_income), len(total_assets), len(total_liabilities))
+            if l > 0:
+                invested_capital = total_assets[:l] - total_liabilities[:l] - cash
+                roc = np.divide(net_income[:l], invested_capital) # TODO: minus dividends
+                roc = np.mean(roc) * 4 # 1 year return on capital
+
+        stat = [[self.sym, eps_growth, forward_pe, earnings_yield, roc]]
         stat = DataFrame(stat, columns=labels)
         stat.drop_duplicates(inplace=True)
         stat.set_index('Symbol', inplace=True)
@@ -581,12 +642,12 @@ class Symbol:
         self.exch = self.stats['Exchange'][self.sym]
 
         # stats of return based on history quotes
-        return_stats = self.return_stats(exclude_dividend=exclude_dividend)
-        self.stats = self.stats.join(return_stats)
+        growth_stats = self.growth_stats(exclude_dividend=exclude_dividend)
+        self.stats = self.stats.join(growth_stats)
 
         # diverge to index stats
-        diverge_stats = self.diverge_stats(index)
-        self.stats = self.stats.join(diverge_stats)
+        relative_growth_stats = self.relative_growth_stats(index)
+        self.stats = self.stats.join(relative_growth_stats)
 
         # trend & momentum
         trend_stats = self.trend_stats()

@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import time
+import operator
 
 #conda install -c https://conda.anaconda.org/anaconda pandas-datareader
 import pandas_datareader.data as web
@@ -60,13 +61,14 @@ def get_stats_intervals(end=None):
         end_date = dt.date.today()
     else:
         end_date = end
+    one_month_ago = end_date - dt.timedelta(days=30)
     three_month_ago = end_date - dt.timedelta(days=90)
     half_year_ago = end_date - dt.timedelta(days=180)
     one_year_ago = end_date - dt.timedelta(days=365)
     two_year_ago = end_date - dt.timedelta(days=365*2)
     three_year_ago = end_date - dt.timedelta(days=365*3)
     five_year_ago = end_date - dt.timedelta(days=365*5)
-    return [end_date, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago]
+    return [end_date, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago]
 
 def str2list(symbols, split='+'):
     """
@@ -118,6 +120,8 @@ def str2num(s, m2b=False):
         factor *= 1000 # billion to million
     num = s.replace(',','').replace('-','').replace('+','').replace('%','').replace('M','').replace('B','')
     return float(num)*factor
+
+financial_fmt = lambda y: pd.Series([str(x).replace(',','').replace('-','0') for x in y], index=y.index)[::-1].astype(np.float)
 
 def min_max_norm(x):
     """
@@ -180,6 +184,7 @@ def get_symbol_yahoo_stats_url(symbols):
     url_str = url_str.strip().replace(' ','') # remove all spaces
 
     # Yahoo Finance tags, refer to http://www.financialwisdomforum.org/gummy-stuff/Yahoo-data.htm
+    # More tags: https://github.com/herval/yahoo-finance/blob/master/lib/yahoo-finance.rb
     tags = {'s':'Symbol', 'x':'Exchange', 'j1':'Market Cap', 'b4':'Book Value', 'r':'P/E', 'p5':'Price/Sales',
             'p6':'Price/Book', 'j4':'EBITDA', 'j':'52-week Low', 'k':'52-week High', 'l1':'Last Trade',
             'd':'Dividend/Share', 'y':'Dividend Yield', 'e':'EPS', 's7':'Short Ratio', 's1':'Shares Owned',
@@ -219,8 +224,18 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
             'Dividend/Share', 'DividendYield', 'DividendPayDate', 'ExDividendDate']
     lines = []
     for sym in sym_list:
-        stock = Share(sym)
         line = [sym]
+        try:
+            stock = Share(sym)
+        except(URLError, RemoteTraceback):
+            print('Warning: failed to connect YQL, try again.')
+            try:
+                stock = Share(sym)
+            except(URLError, RemoteTraceback):
+                print('Error: failed to get stats from YQL for sym %s')
+                lines.append(line)
+                continue
+
         if not exclude_name:
             line += [stock.get_name()]
         line += [stock.get_stock_exchange(), str2num(stock.get_market_cap(), m2b=True),

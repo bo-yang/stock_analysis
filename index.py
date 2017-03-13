@@ -201,13 +201,16 @@ class Index(object):
             print('Error: a list of tickers is expected.')
             return
         if columns == None:
-            return self.components.loc[stocks].transpose()
+            columns = self.components.columns[4:].tolist()
+            #return self.components.loc[stocks].transpose()
         if type(columns) != list:
             print('Error: a list of attribute is expected.')
             return
-        return self.components.loc[stocks, columns].transpose()
+        ret = self.components.loc[stocks, columns].transpose()
+        print(ret.to_string())
+        return
 
-    def filter(self, columns, n=-1, saveto=None):
+    def filter_by_sort(self, columns, n=-1, saveto=None):
         """
         Find out the common top n components according to the given columns(str, list or dict).
 
@@ -215,10 +218,10 @@ class Index(object):
         columns: str, list or dict. By default all given columns will be sorted by descending order.
                  To specify different orders for different columns, a dict can be used.
         For example:
-            cheap={'Avg Quarterly Return':False, 'Last-Quarter Return':True, 'Price In 52-week Range':True}
-            reliable={'Median Quarterly Return':False, 'Avg Quarterly Return':False, 'Median Yearly Return':False, 'Avg Yearly Return':False, 'Yearly Diverge Index':False}
-            reliable=['Half-Year Diverge Index', '1-Year Diverge Index','2-Year Diverge Index', '3-Year Diverge Index','Yearly Diverge Index']
-            buy={'Avg Quarterly Return':False, 'Median Quarterly Return':False, 'Price In 52-week Range':True, 'Avg FSTO Past-Month':True}
+            cheap={'AvgQuarterlyReturn':False, 'LastQuarterReturn':True, 'PriceIn52weekRange':True}
+            reliable={'MedianQuarterlyReturn':False, 'AvgQuarterlyReturn':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyDivergeIndex':False}
+            reliable=['HalfYearDivergeIndex', '1YearDivergeIndex','2YearDivergeIndex', '3YearDivergeIndex','YearlyDivergeIndex']
+            buy={'AvgQuarterlyReturn':False, 'MedianQuarterlyReturn':False, 'PriceIn52weekRange':True, 'AvgFSTOLastMonth':True}
         where 'True' means ascending=True, and 'False' means ascending=False.
         """
         if n <= 0:
@@ -250,11 +253,65 @@ class Index(object):
             common_list = common.get_duplicates()
             if len(common_list) < 1:
                 return None # Nothing in common
-            common = pd.indexes.base.Index(common_list)
+            common = pd.Index(common_list)
+
         if saveto != None and len(common) > 0:
             f = os.path.normpath(self.datapath + '/' + saveto)
             self.components.loc[common].to_csv(f)
         return self.components.loc[common] # DataFrame of common stocks
+
+    def filter_by_compare(self, rules, saveto=None):
+        """
+        Filtering stocks by comparing columns.
+
+        rules: list of three-tuple, where the tuples are like (attribute1, oper, attribute2 or expression).
+
+        For example:
+            rules = [('EPSEstimateCurrentYear', '>', 'EPS'), ('PriceIn52weekRange', '<=', 0.7)]
+            rules = [('LastMonthReturn', '>', 0), ('LastMonthReturn', '>', 'LastQuarterReturn'), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastMonth', '>', 'RelativeGrowthLastQuarter'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('AvgQuarterlyReturn', '>', 0.03)]
+            rules = [('LastMonthReturn', '>', 0), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('AvgQuarterlyReturn', '>', 0.03)]
+        """
+        if type(rules) == tuple:
+            rules = [rules]
+
+        ops = { '>': operator.gt,
+                '<': operator.lt,
+                '>=': operator.ge,
+                '<=': operator.le,
+                '==': operator.eq,
+                '!=': operator.ne,
+                '+=': operator.iadd,
+                '-=': operator.isub,
+                '*=': operator.imul,
+                '/=': operator.itruediv,
+                '%=': operator.imod,
+                '**=': operator.ipow,
+                '//=': operator.ifloordiv }
+        operate = lambda x,oper,y: ops[oper](x, y)
+
+        stats = self.components
+        for rule in rules:
+            if len(rule) != 3:
+                continue # not 3-tuple
+            if len(stats) <= 0:
+                break
+            if (type(rule[0]) != str) or (rule[0] not in stats.columns):
+                continue
+            if (type(rule[2]) == str) and (rule[2] in stats.columns):
+                cut = stats[rule[2]]
+            elif (type(rule[2]) == tuple) and (len(rule[2]) == 3):
+                r = rule[2]
+                cut = operate(stats[r[0]], r[1], r[2])
+            else:
+                cut = rule[2]
+            inp = stats[rule[0]]
+            stats = stats.where(operate(inp, rule[1], cut), np.nan).dropna(axis=0, how='all')
+
+        if saveto != None and len(stats) > 0:
+            f = os.path.normpath(self.datapath + '/' + saveto)
+            stats.to_csv(f)
+
+        return stats
 
     def load_data(self, from_file=True):
         if from_file:
@@ -274,43 +331,6 @@ class Index(object):
         if len(self.components) > 0:
             self.components.to_csv(self.datafile)
         return
-
-def ranking(stocks):
-    """
-    Make a table and compare stocks based on key factors.
-    For each column, the stocks are given a score between [0 - 10], and the total scores are computed for each column.
-
-    stocks: Pandas DataFrame of stock stats or Index
-    """
-    if type(stocks) == pd.DataFrame:
-        symbols = stocks
-    else:
-        print('Error: ranking: unsupported type %s' %type(stocks))
-        return DataFrame()
-
-    # True - the larger the better, False - the smaller the better
-    tags = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'RevenueMomentum':True, 'ProfitMarginMomentum':True, 'EPSGrowth':True, 'PEG':False, 'Forward P/E':False} #, 'PriceIn52weekRange':False}
-    table = DataFrame()
-    for t in tags.keys():
-        maxrange = symbols[t].max() - symbols[t].min()
-        symbols[t].replace(np.nan, maxrange/2, inplace=True) # replace NaN with mean
-        if tags[t]:
-            # the larger the better
-            col = np.round((symbols[t] - symbols[t].min()) / maxrange * 10)
-        else:
-            # the smaller the better
-            col = np.round((symbols[t].max() - symbols[t]) / maxrange * 10)
-        if table.empty:
-            table = table.append(col).transpose()
-        else:
-            table = table.join(col)
-
-    total = pd.Series(table.transpose().sum(), name='Total', index=table.index)
-    table = table.join(total)
-    table.sort_values('Total', ascending=False, inplace=True)
-
-    return table
-
 
 def get_index_components_from_wiki(link, params):
     """
@@ -424,34 +444,35 @@ class NASDAQ(Index):
     def __init__(self, datapath='./data', loaddata=False):
         super(self.__class__, self).__init__(sym='^IXIC', name='NASDAQ', datapath=datapath, loaddata=loaddata)
 
-    def get_compo_list(self):
+    def get_compo_list(self, update_list=False):
         if not os.path.isdir(self.datapath):
             os.makedirs(self.datapath)
         companylist = self.datapath + '/companylist.csv'
 
-        # Exchange NASDAQ
-        f = open(companylist,'wb')
-        link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NASDAQ&render=download'
-        response = urlopen(link)
-        nasdaq=response.read()
-        f.write(nasdaq) # save csv file
-        f.close()
-
-        # Exchange NYSE
-        f = open(companylist,'ab')
-        link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NYSE&render=download'
-        response = urlopen(link)
-        nyse=response.read()
-        f.write(nyse) # save csv file
-        f.close()
-
-        # Exchange AMC
-        f = open(companylist,'ab')
-        link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=AMC&render=download'
-        response = urlopen(link)
-        amc=response.read()
-        f.write(amc) # save csv file
-        f.close()
+        if update_list or not os.path.isfile(companylist):
+            # Exchange NASDAQ
+            f = open(companylist,'wb')
+            link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NASDAQ&render=download'
+            response = urlopen(link)
+            nasdaq=response.read()
+            f.write(nasdaq) # save csv file
+            f.close()
+    
+            # Exchange NYSE
+            f = open(companylist,'ab')
+            link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NYSE&render=download'
+            response = urlopen(link)
+            nyse=response.read()
+            f.write(nyse) # save csv file
+            f.close()
+    
+            # Exchange AMC
+            f = open(companylist,'ab')
+            link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=AMC&render=download'
+            response = urlopen(link)
+            amc=response.read()
+            f.write(amc) # save csv file
+            f.close()
 
         self.components = self.components.from_csv(companylist)
 
