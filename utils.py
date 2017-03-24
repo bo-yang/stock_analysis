@@ -15,7 +15,11 @@ from pandas_datareader._utils import RemoteDataError
 from pandas.io.common import urlopen
 from bs4 import BeautifulSoup
 
+import multiprocessing as mp
+from multiprocessing.dummy import Pool as ThreadPool
+
 from yahoo_finance import Share
+from yahoo_finance import YQLQueryError, YQLResponseMalformedError
 
 # matplotlib
 import matplotlib.pyplot as plt
@@ -106,9 +110,9 @@ def str2num(s, m2b=False):
     if type(s) != str:
         print('Error: str2num: inavlid input.')
         return np.nan
-    if s == '-' or s.upper() == 'N/A' or s.upper() == 'NA':
-        return np.nan
     s = s.upper()
+    if s == '-' or s == 'N/A' or s == 'NA':
+        return np.nan
     factor = 1.0
     if s[0] == '-':
         factor *= -1
@@ -227,15 +231,14 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
         line = [sym]
         try:
             stock = Share(sym)
-        except(URLError, RemoteTraceback):
-            print('Warning: failed to connect YQL, try again.')
+        except:
+            print('Warning: YQL query %s failure, try again.' %sym)
             try:
                 stock = Share(sym)
-            except(URLError, RemoteTraceback):
-                print('Error: failed to get stats from YQL for sym %s')
+            except:
+                print('Error: failed to get stats from YQL for sym %s.' %sym)
                 lines.append(line)
                 continue
-
         if not exclude_name:
             line += [stock.get_name()]
         line += [stock.get_stock_exchange(), str2num(stock.get_market_cap(), m2b=True),

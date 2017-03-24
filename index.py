@@ -1,9 +1,6 @@
 from stock_analysis.utils import *
 from stock_analysis.symbol import *
 
-import multiprocessing as mp
-from multiprocessing.dummy import Pool as ThreadPool
-
 class Index(object):
     """
     Base class of stock index.
@@ -479,7 +476,6 @@ class NASDAQ(Index):
         # delete columns
         self.components.drop('LastSale', axis=1, inplace=True)
         self.components.drop('MarketCap', axis=1, inplace=True)
-        self.components.drop('ADR TSO', axis=1, inplace=True)
         self.components.drop('IPOyear', axis=1, inplace=True)
         self.components.dropna(axis=1, inplace=True)
 

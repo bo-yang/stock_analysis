@@ -599,27 +599,37 @@ class Symbol:
         forward_pe = self.quotes['Adj Close'][-1] / self.stats['EPSEstimateCurrentYear'][self.sym]
 
         # Earnings Yield = (EPS last year) / (Share Price)
-        # TODO: use Greenblatt's updated version:
-        # Earnings Yield = (Earnings Before Interest & Taxes + Depreciation – CapEx) / Enterprise Value (Market Value + Debt – Cash)
-        earnings_yield =  self.stats['EPS'][self.sym] / self.quotes['Adj Close'][-1]
+        # Greenblatt's updated version:
+        #   Earnings Yield = (EBIT + Depreciation – CapEx) / Enterprise Value,
+        # where Enterprise Value = (Market Value + Debt – Cash)
+        earnings_yield = 0
+        if (not self.balance.empty) and (self.stats['MarketCap'][0] > 0) and (self.stats['EBITDA'][0] > 0):
+            total_debt = financial_fmt(self.balance.loc['Total Debt'])[0] # in million
+            ent_value = self.stats['MarketCap'][0]*1000 + total_debt # TODO: minus cash
+            earnings_yield = self.stats['EBITDA'][0] / ent_value
+        if earnings_yield == 0: # try a different definition
+            earnings_yield = self.stats['EPS'][self.sym] / self.quotes['Adj Close'][-1]
 
         # Return on capital:
-        #   ROC = (Net Income - Dividends) / InvestedCapital
+        #   ROC = (NetOperatingProfit - AdjustedTaxes) / InvestedCapital
+        # or
+        #   ROC = (Net Income - Dividends) / TotalCapital
         # where,
         #   InvestedCapital = FixedAssets + IntangibleAssets + CurrentAssets - CurrentLiabilities - Cash
-        if self.income.empty or self.balance.empty or self.cashflow.empty:
-            roc = 0
-        else:
-            roc = 0
-            net_income = financial_fmt(self.income.loc['Net Income'])
+        roc = 0
+        if not (self.income.empty or self.balance.empty or self.cashflow.empty):
+            #net_income = financial_fmt(self.income.loc['Net Income'])
+            operating_income = financial_fmt(self.income.loc['Operating Income'])
+            adjusted_tax = np.abs(financial_fmt(self.income.loc['Income Before Tax']) - financial_fmt(self.income.loc['Income After Tax'])) # Tax must be positive
             total_assets = financial_fmt(self.balance.loc['Total Assets'])
             total_liabilities = financial_fmt(self.balance.loc['Total Liabilities'])
             #cash_from_operating = financial_fmt(self.cashflow.loc['Cash from Operating Activities'])
             cash = 0 # TODO: calculate total cash
-            l = min(len(net_income), len(total_assets), len(total_liabilities))
+            l = min(len(operating_income), len(total_assets), len(total_liabilities))
             if l > 0:
                 invested_capital = total_assets[:l] - total_liabilities[:l] - cash
-                roc = np.divide(net_income[:l], invested_capital) # TODO: minus dividends
+                #roc = np.divide(net_income[:l], invested_capital) # TODO: minus dividends
+                roc = np.divide((operating_income[:l] - adjusted_tax[:l]), invested_capital)
                 roc = np.mean(roc) * 4 # 1 year return on capital
 
         stat = [[self.sym, eps_growth, forward_pe, earnings_yield, roc]]

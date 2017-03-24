@@ -3,10 +3,44 @@ from stock_analysis.symbol import *
 from stock_analysis.index import *
 
 # True - the larger the better, False - the smaller the better
-rank_tags_growth = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'RevenueMomentum':True, 'ProfitMarginMomentum':True, 'Debt/Assets Momentum':False, 'EPSGrowth':True, 'PEG':False, 'Forward P/E':False, 'Price/Book':False, 'PriceIn52weekRange':False, 'EarningsYield':True, 'ReturnOnCapital':True}
-rank_tags_value = {'EarningsYield':True, 'ReturnOnCapital':True, 'EPSGrowth':True}
+rank_tags_growth = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'PriceIn52weekRange':False}
+rank_tags_reliable = {'MedianQuarterlyReturn':False, 'AvgQuarterlyReturn':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyDivergeIndex':False}
+rank_tags_value = {'EarningsYield':True, 'ReturnOnCapital':True}
+rank_tags_hybrid = {'EarningsYield':True, 'ReturnOnCapital':True, 'EPSGrowth':True, 'AvgQuarterlyReturn':True,'PriceIn52weekRange':False}
+rank_tags_hybrid2 = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'RevenueMomentum':True, 'ProfitMarginMomentum':True, 'Debt/Assets Momentum':False, 'EPSGrowth':True, 'PEG':False, 'Forward P/E':False, 'Price/Book':False, 'PriceIn52weekRange':False, 'EarningsYield':True, 'ReturnOnCapital':True}
 
-def ranking(stocks, tags=rank_tags_value, rank='range', saveto=None):
+blacklist = ['WINS', 'ENIC', 'LEXEB', 'LAUR', 'BGCA', 'AEK', 'MBT', 'VIP', 'BMA', 'EOCC', 'SID', 'HNP', 'PDP', 'GGAL',
+        'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI']
+
+def value_analysis(index):
+    """
+    Value analysis for an Index.
+    """
+    if not issubclass(type(index), Index):
+        print('Error: only Index type is supported.')
+        return DataFrame()
+
+    if type(index) == NASDAQ:
+        rule = [('EPS', '>', 0), ('MarketCap', '>', 2)]
+    else:
+        rule = [('EPS', '>', 0)]
+    stocks_value = filter_by_compare(index, rule)
+
+    # Drop foreign companies
+    if 'ADR TSO' in stocks_value.columns:
+        m = stocks_value['ADR TSO'] == 'n/a'
+        stocks_value = stocks_value.where(m, np.nan).dropna(how='all')
+    stocks_value.drop(blacklist, inplace=True, errors='ignore')
+
+    # Ranking stocks
+    stock_rank = ranking(stocks_value, tags=rank_tags_value, rank='sort')
+    stock_rank = stock_rank.join(index.components.loc[stock_rank.index]['PriceIn52weekRange'])
+    saveto = 'data/%s_value.csv' %index.name
+    stock_rank.to_csv(saveto)
+    #print(stock_rank.to_string())
+    return stock_rank
+
+def ranking(stocks, tags=rank_tags_hybrid, rank='range', saveto=None):
     """
     Make a table and compare stocks based on key factors.
     stocks: Pandas DataFrame of stock stats or Index
@@ -24,9 +58,9 @@ def ranking(stocks, tags=rank_tags_value, rank='range', saveto=None):
 
     table = DataFrame()
     if rank == 'range':
-        table = ranking_by_range(symbols, tags, saveto=saveto)
+        table = ranking_by_range(symbols, tags)
     elif rank == 'sort':
-        table = ranking_by_sort(symbols, tags, saveto=saveto)
+        table = ranking_by_sort(symbols, tags)
     else:
         print('Error: unsupported ranking method %s' %rank)
 
@@ -34,22 +68,23 @@ def ranking(stocks, tags=rank_tags_value, rank='range', saveto=None):
         table.to_csv(saveto)
     return table
 
-def ranking_by_range(symbols, tags, saveto=None):
+def ranking_by_range(symbols, tags):
     """
     Make a table and compare stocks based on key factors.
     For each column, the stocks are given a score between [0 - 10], and the total scores are computed for each column.
     """
     table = DataFrame()
     for t in tags.keys():
-        maxrange = symbols[t].max() - symbols[t].min()
+        col_max = symbols[t].max()
+        col_min = symbols[t].min()
+        maxrange = col_max - col_min
         symbols[t].replace(np.nan, maxrange/2, inplace=True) # replace NaN with mean
-        # TODO: suppress noise
         if tags[t]:
             # the larger the better
-            col = np.round((symbols[t] - symbols[t].min()) / maxrange * 10)
+            col = np.round((symbols[t] - col_min) / maxrange * 10)
         else:
             # the smaller the better
-            col = np.round((symbols[t].max() - symbols[t]) / maxrange * 10)
+            col = np.round((col_max - symbols[t]) / maxrange * 10)
         if table.empty:
             table = table.append(col).transpose()
         else:
@@ -58,12 +93,11 @@ def ranking_by_range(symbols, tags, saveto=None):
     total = pd.Series(table.transpose().sum(), name='Total', index=table.index)
     table = table.join(total)
     table.sort_values('Total', ascending=False, inplace=True)
-
     return table
 
-def ranking_by_sort(symbols, tags, saveto=None):
+def ranking_by_sort(symbols, tags):
     """
-    Ranking stocks by sorting.
+    Ranking stocks by sorting. Total scores - the lower the better.
     """
     #roc = symbols['EarningsYield']
     #ey = symbols['ReturnOnCapital']
@@ -71,7 +105,7 @@ def ranking_by_sort(symbols, tags, saveto=None):
     rank = pd.Series()
     for t in tags.keys():
         col = symbols[t].replace(np.nan, 0) # replace NaN with mean
-        col = col.sort_values(ascending=tags[t])
+        col = col.sort_values(ascending=(not tags[t]))
         rank_col = pd.Series(np.arange(len(col)), name=t+'Score', index=col.index)
         rank_col = rank_col.sort_index()
         if table.empty:
@@ -85,8 +119,7 @@ def ranking_by_sort(symbols, tags, saveto=None):
 
     total = pd.Series(rank, name='Total', index=table.index)
     table = table.join(total)
-    table.sort_values('Total', ascending=False, inplace=True)
-
+    table.sort_values('Total', ascending=True, inplace=True)
     return table
 
 def filter_by_sort(stocks, columns, n=-1, saveto=None):
@@ -101,6 +134,7 @@ def filter_by_sort(stocks, columns, n=-1, saveto=None):
         reliable={'MedianQuarterlyReturn':False, 'AvgQuarterlyReturn':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyDivergeIndex':False}
         reliable=['HalfYearDivergeIndex', '1YearDivergeIndex','2YearDivergeIndex', '3YearDivergeIndex','YearlyDivergeIndex']
         buy={'AvgQuarterlyReturn':False, 'MedianQuarterlyReturn':False, 'PriceIn52weekRange':True, 'AvgFSTOLastMonth':True}
+        value = {'EarningsYield':False, 'ReturnOnCapital':False, 'EPSGrowth':False}
     where 'True' means ascending=True, and 'False' means ascending=False.
     """
     if type(stocks) == pd.DataFrame:
@@ -160,8 +194,9 @@ def filter_by_compare(stocks, rules, saveto=None):
         rules = [('EPSEstimateCurrentYear', '>', 'EPS'), ('PriceIn52weekRange', '<=', 0.7)]
         rules = [('LastMonthReturn', '>', 0), ('LastMonthReturn', '>', 'LastQuarterReturn'), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastMonth', '>', 'RelativeGrowthLastQuarter'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('AvgQuarterlyReturn', '>', 0.03)]
         rules = [('LastMonthReturn', '>', 0), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('AvgQuarterlyReturn', '>', 0.03)]
-        rules = [('AvgQuarterlyReturn', '>', 0.04), ('MedianQuarterlyReturn', '>', 0.04), ('PriceIn52weekRange', '<=', 0.8)]
+        rules = [('AvgQuarterlyReturn', '>', 0.03), ('MedianQuarterlyReturn', '>', 0.03), ('PriceIn52weekRange', '<=', 0.8)]
         rules = [('EPS', '>=', 0), ('MarketCap', '>', 2), ('AvgMonthlyReturn', '>', 0.007), ('AvgQuarterlyReturn', '>', 0.04), ('MedianQuarterlyReturn', '>', 0.04)]
+        rules = [('EPS', '>=', 0), ('MarketCap', '>', 2)]
     """
     if type(stocks) == pd.DataFrame:
         components = stocks
