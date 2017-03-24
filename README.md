@@ -22,3 +22,5 @@ rank_tags_hybrid = {'EarningsYield':True, 'ReturnOnCapital':True, 'EPSGrowth':Tr
 sp500_hybrid = ranking(sp500, tags=rank_tags_hybrid)
 ```
 For other APIs, please refer to the code.
+
+Any suggestions please send e-mail to bonny95@gmail.com.
