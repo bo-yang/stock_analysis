@@ -19,7 +19,6 @@ import multiprocessing as mp
 from multiprocessing.dummy import Pool as ThreadPool
 
 from yahoo_finance import Share
-from yahoo_finance import YQLQueryError, YQLResponseMalformedError
 
 # matplotlib
 import matplotlib.pyplot as plt
