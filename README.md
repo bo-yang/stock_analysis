@@ -21,6 +21,6 @@ sp500_value = value_analysis(sp500)  # do the value analysis
 rank_tags_hybrid = {'EarningsYield':True, 'ReturnOnCapital':True, 'EPSGrowth':True, 'AvgQuarterlyReturn':True,'PriceIn52weekRange':False}
 sp500_hybrid = ranking(sp500, tags=rank_tags_hybrid)
 ```
-For other APIs, please refer to the code.
+For more explanation of the code, please refer to [My First Taste of Computational Stock Analysis](http://www.bo-yang.net/2017/03/24/my-first-taste-of-stock-analysis). For other APIs, please refer to the code.
 
 Any suggestions please send e-mail to bonny95@gmail.com.
