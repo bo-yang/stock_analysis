@@ -611,12 +611,12 @@ class Symbol:
             earnings_yield = self.stats['EPS'][self.sym] / self.quotes['Adj Close'][-1]
 
         # Return on capital:
-        #   ROC = (NetOperatingProfit - AdjustedTaxes) / InvestedCapital
+        #   ROIC = (NetOperatingProfit - AdjustedTaxes) / InvestedCapital
         # or
-        #   ROC = (Net Income - Dividends) / TotalCapital
+        #   ROIC = (Net Income - Dividends) / TotalCapital
         # where,
         #   InvestedCapital = FixedAssets + IntangibleAssets + CurrentAssets - CurrentLiabilities - Cash
-        roc = 0
+        roic = 0
         if not (self.income.empty or self.balance.empty or self.cashflow.empty):
             #net_income = financial_fmt(self.income.loc['Net Income'])
             operating_income = financial_fmt(self.income.loc['Operating Income'])
@@ -628,11 +628,11 @@ class Symbol:
             l = min(len(operating_income), len(total_assets), len(total_liabilities))
             if l > 0:
                 invested_capital = total_assets[:l] - total_liabilities[:l] - cash
-                #roc = np.divide(net_income[:l], invested_capital) # TODO: minus dividends
-                roc = np.divide((operating_income[:l] - adjusted_tax[:l]), invested_capital)
-                roc = np.mean(roc) * 4 # 1 year return on capital
+                #roic = np.divide(net_income[:l], invested_capital) # TODO: minus dividends
+                roic = np.divide((operating_income[:l] - adjusted_tax[:l]), invested_capital)
+                roic = np.mean(roic) * 4 # 1 year return on capital
 
-        stat = [[self.sym, eps_growth, forward_pe, earnings_yield, roc]]
+        stat = [[self.sym, eps_growth, forward_pe, earnings_yield, roic]]
         stat = DataFrame(stat, columns=labels)
         stat.drop_duplicates(inplace=True)
         stat.set_index('Symbol', inplace=True)

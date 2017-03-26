@@ -6,13 +6,15 @@ import datetime as dt
 import time
 import operator
 
+from pandas import DataFrame
+from pandas.tseries.offsets import BDay # business days
+from pandas.io.common import urlopen
+
 #conda install -c https://conda.anaconda.org/anaconda pandas-datareader
 import pandas_datareader.data as web
 import pandas_datareader as pdr
-from pandas import DataFrame
-from pandas.tseries.offsets import BDay # business days
 from pandas_datareader._utils import RemoteDataError
-from pandas.io.common import urlopen
+
 from bs4 import BeautifulSoup
 
 import multiprocessing as mp
