@@ -1,6 +1,6 @@
 from stock_analysis.utils import *
 from stock_analysis.symbol import *
-from stock_analysis.index import *
+from stock_analysis.index import Index, NASDAQ, SP500, SP400
 
 # True - the larger the better, False - the smaller the better
 rank_tags_growth = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'PriceIn52weekRange':False}
@@ -10,7 +10,7 @@ rank_tags_hybrid = {'EarningsYield':True, 'ReturnOnCapital':True, 'EPSGrowth':Tr
 rank_tags_hybrid2 = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'RevenueMomentum':True, 'ProfitMarginMomentum':True, 'Debt/Assets Momentum':False, 'EPSGrowth':True, 'PEG':False, 'Forward P/E':False, 'Price/Book':False, 'PriceIn52weekRange':False, 'EarningsYield':True, 'ReturnOnCapital':True}
 
 blacklist = ['WINS', 'ENIC', 'LEXEB', 'LAUR', 'BGCA', 'AEK', 'MBT', 'VIP', 'BMA', 'EOCC', 'SID', 'HNP', 'PDP', 'GGAL',
-        'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI']
+        'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI', 'PAM']
 
 def value_analysis(index):
     """
@@ -21,7 +21,7 @@ def value_analysis(index):
         return DataFrame()
 
     if type(index) == NASDAQ:
-        rule = [('EPS', '>', 0), ('MarketCap', '>', 2)]
+        rule = [('EPS', '>', 0), ('MarketCap', '>', 1)]
     else:
         rule = [('EPS', '>', 0)]
     stocks_value = filter_by_compare(index, rule)
@@ -34,13 +34,13 @@ def value_analysis(index):
 
     # Ranking stocks
     stock_rank = ranking(stocks_value, tags=rank_tags_value, rank='sort')
-    stock_rank = stock_rank.join(index.components.loc[stock_rank.index]['PriceIn52weekRange'])
+    stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['PriceIn52weekRange', 'Sector', 'Industry']])
     saveto = 'data/%s_value.csv' %index.name
     stock_rank.to_csv(saveto)
     #print(stock_rank.to_string())
     return stock_rank
 
-def ranking(stocks, tags=rank_tags_hybrid, rank='range', saveto=None):
+def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
     """
     Make a table and compare stocks based on key factors.
     stocks: Pandas DataFrame of stock stats or Index
@@ -149,7 +149,7 @@ def filter_by_sort(stocks, columns, n=-1, saveto=None):
         n = int(len(components)/2)
     if n <= 0:
         print('Error: components empty, run get_stats() first.')
-        return None
+        return DataFrame()
 
     if type(columns) == str or type(columns) == list:
         cols = str2list(columns)
@@ -159,9 +159,9 @@ def filter_by_sort(stocks, columns, n=-1, saveto=None):
         orders = list(columns.values())
     else:
         print('Error: unsupported columns type.')
-        return None
+        return DataFrame()
     if len(cols) == 0:
-        return None
+        return DataFrame()
     elif len(cols) == 1:
         return components.sort_values(cols[0], ascending=orders[0])[:n] # slicing
 
@@ -173,7 +173,7 @@ def filter_by_sort(stocks, columns, n=-1, saveto=None):
         common = common.append(comp.index[:n])
         common_list = common.get_duplicates()
         if len(common_list) < 1:
-            return None # Nothing in common
+            return DataFrame() # Nothing in common
         common = pd.Index(common_list)
 
     if saveto != None and len(common) > 0:
