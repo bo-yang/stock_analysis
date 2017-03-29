@@ -15,15 +15,17 @@ blacklist = ['WINS', 'ENIC', 'LEXEB', 'LAUR', 'BGCA', 'AEK', 'MBT', 'VIP', 'BMA'
 
 def value_analysis(index):
     """
-    Value analysis for an Index.
+    Value analysis for the given Index.
     """
     if not issubclass(type(index), Index):
         print('Error: only Index type is supported.')
         return DataFrame()
 
     if type(index) == NASDAQ:
-        rule = [('MarketCap', '>', 1)]
-        stocks_value = index.filter_by_compare(rule)
+        rule = [('EPS', '>', 0), ('MarketCap', '>', 1)]
+    else:
+        rule = [('EPS', '>', 0)]
+    stocks_value = index.filter_by_compare(rule)
 
     # Drop foreign companies
     if 'ADR TSO' in stocks_value.columns:
@@ -41,7 +43,7 @@ def value_analysis(index):
     small_utilities = index.filter_by_compare(rule)
     stocks_value.drop(small_utilities.index, inplace=True, errors='ignore')
 
-    # Drop small retails and REITs
+    # Drop small retailers and REITs
     industries = ['Clothing/Shoe/Accessory Stores', 'Department/Specialty Retail Stores', 'Real Estate Investment Trusts']
     for indust in industries:
         rule = [('Industry', '==', indust), ('MarketCap', '<', 5)]
