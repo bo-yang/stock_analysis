@@ -22,10 +22,8 @@ def value_analysis(index):
         return DataFrame()
 
     if type(index) == NASDAQ:
-        rule = [('EPS', '>', 0), ('MarketCap', '>', 1)]
-    else:
-        rule = [('EPS', '>', 0)]
-    stocks_value = index.filter_by_compare(rule)
+        rule = [('MarketCap', '>', 1)]
+        stocks_value = index.filter_by_compare(rule)
 
     # Drop foreign companies
     if 'ADR TSO' in stocks_value.columns:

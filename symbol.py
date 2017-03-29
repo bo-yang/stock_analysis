@@ -619,8 +619,8 @@ class Symbol:
         roic = 0
         if not (self.income.empty or self.balance.empty or self.cashflow.empty):
             #net_income = financial_fmt(self.income.loc['Net Income'])
-            operating_income = financial_fmt(self.income.loc['Operating Income'])
-            adjusted_tax = np.abs(financial_fmt(self.income.loc['Income Before Tax']) - financial_fmt(self.income.loc['Income After Tax'])) # Tax must be positive
+            operating_income = financial_fmt(self.income.loc['Operating Income']) # TODO: need a reliable way to cover negative operting income
+            adjusted_tax = financial_fmt(self.income.loc['Income Before Tax']) - financial_fmt(self.income.loc['Income After Tax'])
             total_assets = financial_fmt(self.balance.loc['Total Assets'])
             total_liabilities = financial_fmt(self.balance.loc['Total Liabilities'])
             #cash_from_operating = financial_fmt(self.cashflow.loc['Cash from Operating Activities'])
