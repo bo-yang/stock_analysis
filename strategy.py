@@ -1,6 +1,6 @@
 from stock_analysis.utils import *
 from stock_analysis.symbol import *
-from stock_analysis.index import Index, NASDAQ, SP500, SP400
+from stock_analysis.index import *
 
 # True - the larger the better, False - the smaller the better
 rank_tags_growth = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'PriceIn52weekRange':False}
@@ -10,7 +10,8 @@ rank_tags_hybrid = {'EarningsYield':True, 'ReturnOnCapital':True, 'EPSGrowth':Tr
 rank_tags_hybrid2 = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'RevenueMomentum':True, 'ProfitMarginMomentum':True, 'Debt/Assets Momentum':False, 'EPSGrowth':True, 'PEG':False, 'Forward P/E':False, 'Price/Book':False, 'PriceIn52weekRange':False, 'EarningsYield':True, 'ReturnOnCapital':True}
 
 blacklist = ['WINS', 'ENIC', 'LEXEB', 'LAUR', 'BGCA', 'AEK', 'MBT', 'VIP', 'BMA', 'EOCC', 'SID', 'HNP', 'PDP', 'GGAL',
-        'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI', 'PAM']
+        'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI', 'PAM',
+        'OEC']
 
 def value_analysis(index):
     """
@@ -24,13 +25,30 @@ def value_analysis(index):
         rule = [('EPS', '>', 0), ('MarketCap', '>', 1)]
     else:
         rule = [('EPS', '>', 0)]
-    stocks_value = filter_by_compare(index, rule)
+    stocks_value = index.filter_by_compare(rule)
 
     # Drop foreign companies
     if 'ADR TSO' in stocks_value.columns:
         m = stocks_value['ADR TSO'] == 'n/a'
         stocks_value = stocks_value.where(m, np.nan).dropna(how='all')
     stocks_value.drop(blacklist, inplace=True, errors='ignore')
+
+    # Drop smaller financial companies
+    rule = [('Sector', '==', 'Finance'), ('MarketCap', '<', 6)]
+    small_financials = index.filter_by_compare(rule)
+    stocks_value.drop(small_financials.index, inplace=True, errors='ignore')
+
+    # Drop smaller public utilities
+    rule = [('Sector', '==', 'Public Utilities'), ('MarketCap', '<', 5)]
+    small_utilities = index.filter_by_compare(rule)
+    stocks_value.drop(small_utilities.index, inplace=True, errors='ignore')
+
+    # Drop small retails and REITs
+    industries = ['Clothing/Shoe/Accessory Stores', 'Department/Specialty Retail Stores', 'Real Estate Investment Trusts']
+    for indust in industries:
+        rule = [('Industry', '==', indust), ('MarketCap', '<', 5)]
+        to_be_dropped = index.filter_by_compare(rule)
+        stocks_value.drop(to_be_dropped.index, inplace=True, errors='ignore')
 
     # Ranking stocks
     stock_rank = ranking(stocks_value, tags=rank_tags_value, rank='sort')
@@ -117,7 +135,7 @@ def ranking_by_sort(symbols, tags):
             table = table.join(rank_col)
             rank = rank.sort_index() + rank_col
 
-    total = pd.Series(rank, name='Total', index=table.index)
+    total = pd.Series(rank/len(tags), name='Total', index=table.index)
     table = table.join(total)
     table.sort_values('Total', ascending=True, inplace=True)
     return table
@@ -138,50 +156,22 @@ def filter_by_sort(stocks, columns, n=-1, saveto=None):
     where 'True' means ascending=True, and 'False' means ascending=False.
     """
     if type(stocks) == pd.DataFrame:
-        components = stocks
+        index = Index()
+        index.components = stocks
     elif issubclass(type(stocks), Index):
-        components = stocks.components
+        index = stocks
     else:
         print('Error: ranking: unsupported type %s' %type(stocks))
         return DataFrame()
 
-    if n <= 0:
-        n = int(len(components)/2)
-    if n <= 0:
-        print('Error: components empty, run get_stats() first.')
-        return DataFrame()
-
-    if type(columns) == str or type(columns) == list:
-        cols = str2list(columns)
-        orders = [False]*len(cols) # by default ascending = False
-    elif type(columns) == dict:
-        cols = list(columns.keys())
-        orders = list(columns.values())
-    else:
-        print('Error: unsupported columns type.')
-        return DataFrame()
-    if len(cols) == 0:
-        return DataFrame()
-    elif len(cols) == 1:
-        return components.sort_values(cols[0], ascending=orders[0])[:n] # slicing
-
-    # multiple columns
-    comp = components.sort_values(cols[0], ascending=orders[0])
-    common = comp.index[:n]
-    for col,order in zip(cols[1:], orders[1:]):
-        comp = components.sort_values(col, ascending=order)
-        common = common.append(comp.index[:n])
-        common_list = common.get_duplicates()
-        if len(common_list) < 1:
-            return DataFrame() # Nothing in common
-        common = pd.Index(common_list)
+    stocks = index.filter_by_sort(columns, n, saveto=None)
 
     if saveto != None and len(common) > 0:
         if issubclass(type(stocks), Index):
             f = os.path.normpath(stocks.datapath + '/' + saveto)
         else:
             f = saveto
-        components.loc[common].to_csv(f)
+        stocks.loc[common].to_csv(f)
     return components.loc[common] # DataFrame of common stocks
 
 def filter_by_compare(stocks, rules, saveto=None):
@@ -199,48 +189,15 @@ def filter_by_compare(stocks, rules, saveto=None):
         rules = [('EPS', '>=', 0), ('MarketCap', '>', 2)]
     """
     if type(stocks) == pd.DataFrame:
-        components = stocks
+        index = Index()
+        index.components = stocks
     elif issubclass(type(stocks), Index):
-        components = stocks.components
+        index = stocks
     else:
         print('Error: ranking: unsupported type %s' %type(stocks))
         return DataFrame()
 
-    if type(rules) == tuple:
-        rules = [rules]
-
-    ops = { '>': operator.gt,
-            '<': operator.lt,
-            '>=': operator.ge,
-            '<=': operator.le,
-            '==': operator.eq,
-            '!=': operator.ne,
-            '+=': operator.iadd,
-            '-=': operator.isub,
-            '*=': operator.imul,
-            '/=': operator.itruediv,
-            '%=': operator.imod,
-            '**=': operator.ipow,
-            '//=': operator.ifloordiv }
-    operate = lambda x,oper,y: ops[oper](x, y)
-
-    stats = components
-    for rule in rules:
-        if len(rule) != 3:
-            continue # not 3-tuple
-        if len(stats) <= 0:
-            break
-        if (type(rule[0]) != str) or (rule[0] not in stats.columns):
-            continue
-        if (type(rule[2]) == str) and (rule[2] in stats.columns):
-            cut = stats[rule[2]]
-        elif (type(rule[2]) == tuple) and (len(rule[2]) == 3):
-            r = rule[2]
-            cut = operate(stats[r[0]], r[1], r[2])
-        else:
-            cut = rule[2]
-        inp = stats[rule[0]]
-        stats = stats.where(operate(inp, rule[1], cut), np.nan).dropna(axis=0, how='all')
+    stats = index.filter_by_compare(rules, saveto=None)
 
     if saveto != None and len(stats) > 0:
         if issubclass(type(stocks), Index):

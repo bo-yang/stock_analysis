@@ -1,6 +1,5 @@
 from stock_analysis.utils import *
 from stock_analysis.symbol import *
-from stock_analysis.strategy import filter_by_sort, filter_by_compare
 
 class Index(object):
     """
@@ -222,12 +221,42 @@ class Index(object):
             buy={'AvgQuarterlyReturn':False, 'MedianQuarterlyReturn':False, 'PriceIn52weekRange':True, 'AvgFSTOLastMonth':True}
         where 'True' means ascending=True, and 'False' means ascending=False.
         """
-        stocks = filter_by_sort(self.components, columns, n)
+        components = self.components
+        if n <= 0:
+            n = int(len(components)/2)
+        if n <= 0:
+            print('Error: components empty, run get_stats() first.')
+            return DataFrame()
+    
+        if type(columns) == str or type(columns) == list:
+            cols = str2list(columns)
+            orders = [False]*len(cols) # by default ascending = False
+        elif type(columns) == dict:
+            cols = list(columns.keys())
+            orders = list(columns.values())
+        else:
+            print('Error: unsupported columns type.')
+            return DataFrame()
+        if len(cols) == 0:
+            return DataFrame()
+        elif len(cols) == 1:
+            return components.sort_values(cols[0], ascending=orders[0])[:n] # slicing
+    
+        # multiple columns
+        comp = components.sort_values(cols[0], ascending=orders[0])
+        common = comp.index[:n]
+        for col,order in zip(cols[1:], orders[1:]):
+            comp = components.sort_values(col, ascending=order)
+            common = common.append(comp.index[:n])
+            common_list = common.get_duplicates()
+            if len(common_list) < 1:
+                return DataFrame() # Nothing in common
+            common = pd.Index(common_list)
 
-        if saveto != None and len(stocks) > 0:
+        if saveto != None and len(common) > 0:
             f = os.path.normpath(self.datapath + '/' + saveto)
-            stocks.to_csv(f)
-        return stocks # DataFrame of common stocks
+            common.to_csv(f)
+        return common # DataFrame of common stocks
 
     def filter_by_compare(self, rules, saveto=None):
         """
@@ -240,13 +269,47 @@ class Index(object):
             rules = [('LastMonthReturn', '>', 0), ('LastMonthReturn', '>', 'LastQuarterReturn'), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastMonth', '>', 'RelativeGrowthLastQuarter'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('AvgQuarterlyReturn', '>', 0.03)]
             rules = [('LastMonthReturn', '>', 0), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('AvgQuarterlyReturn', '>', 0.03)]
         """
-        stocks = filter_by_compare(self.components, rules)
+        if type(rules) == tuple:
+            rules = [rules]
+    
+        ops = { '>': operator.gt,
+                '<': operator.lt,
+                '>=': operator.ge,
+                '<=': operator.le,
+                '==': operator.eq,
+                '!=': operator.ne,
+                '+=': operator.iadd,
+                '-=': operator.isub,
+                '*=': operator.imul,
+                '/=': operator.itruediv,
+                '%=': operator.imod,
+                '**=': operator.ipow,
+                '//=': operator.ifloordiv }
+        operate = lambda x,oper,y: ops[oper](x, y)
+    
+        stats = self.components
+        for rule in rules:
+            if len(rule) != 3:
+                continue # not 3-tuple
+            if len(stats) <= 0:
+                break
+            if (type(rule[0]) != str) or (rule[0] not in stats.columns):
+                continue
+            if (type(rule[2]) == str) and (rule[2] in stats.columns):
+                cut = stats[rule[2]]
+            elif (type(rule[2]) == tuple) and (len(rule[2]) == 3):
+                r = rule[2]
+                cut = operate(stats[r[0]], r[1], r[2])
+            else:
+                cut = rule[2]
+            inp = stats[rule[0]]
+            stats = stats.where(operate(inp, rule[1], cut), np.nan).dropna(axis=0, how='all')
 
-        if saveto != None and len(stocks) > 0:
+        if saveto != None and len(stats) > 0:
             f = os.path.normpath(self.datapath + '/' + saveto)
-            stocks.to_csv(f)
+            stats.to_csv(f)
 
-        return stocks
+        return stats
 
     def load_data(self, from_file=True):
         if from_file:
