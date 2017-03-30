@@ -33,15 +33,12 @@ def value_analysis(index):
         stocks_value = stocks_value.where(m, np.nan).dropna(how='all')
     stocks_value.drop(blacklist, inplace=True, errors='ignore')
 
-    # Drop smaller financial companies
-    rule = [('Sector', '==', 'Finance'), ('MarketCap', '<', 6)]
-    small_financials = index.filter_by_compare(rule)
-    stocks_value.drop(small_financials.index, inplace=True, errors='ignore')
-
-    # Drop smaller public utilities
-    rule = [('Sector', '==', 'Public Utilities'), ('MarketCap', '<', 5)]
-    small_utilities = index.filter_by_compare(rule)
-    stocks_value.drop(small_utilities.index, inplace=True, errors='ignore')
+    # Drop smaller financial/utitlity/transportation companies
+    sectors = ['Finance', 'Public Utilities', 'Transportation']
+    for sec in sectors:
+        rule = [('Sector', '==', sec), ('MarketCap', '<', 8)]
+        small_companies = index.filter_by_compare(rule)
+        stocks_value.drop(small_companies.index, inplace=True, errors='ignore')
 
     # Drop small retailers and REITs
     industries = ['Clothing/Shoe/Accessory Stores', 'Department/Specialty Retail Stores', 'Real Estate Investment Trusts']
@@ -52,7 +49,7 @@ def value_analysis(index):
 
     # Ranking stocks
     stock_rank = ranking(stocks_value, tags=rank_tags_value, rank='sort')
-    stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['PriceIn52weekRange', 'Sector', 'Industry']])
+    stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['AvgQuarterlyReturn', 'PriceIn52weekRange', 'Sector', 'Industry']])
     saveto = 'data/%s_value.csv' %index.name
     stock_rank.to_csv(saveto)
     #print(stock_rank.to_string())
