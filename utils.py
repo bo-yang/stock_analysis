@@ -234,6 +234,7 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
             stock = Share(sym)
         except:
             print('Warning: YQL query %s failure, try again.' %sym)
+            time.sleep(1)
             try:
                 stock = Share(sym)
             except:

@@ -115,10 +115,16 @@ class Symbol:
         # Income Statement
         try:
             browser.get(site)
-        except TimeoutException:
-            print("Error: failed to get link: %s." %site)
-            browser.close()
-            return 
+        except:
+            print("Download financial failed, try again...")
+            time.sleep(1)
+            try:
+                browser.get(site)
+            except:
+                print("Error: failed to get link: %s." %site)
+                if close_browser:
+                    browser.close()
+                return 
         tables=browser.find_elements_by_id('fs-table')
         if len(tables) < 1:
             print('Error: %s: failed to find income statement, exchange %s.' %(self.sym, exchange))
