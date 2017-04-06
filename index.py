@@ -118,8 +118,6 @@ class Index(object):
         if self.components.empty:
             self.get_compo_list()
         exch = None
-        if self.name == 'NASDAQ':
-            exch = 'NASDAQ'
         browser=webdriver.Chrome()
         for sym in self.components.index:
             print('Downloading financial data for ' + sym) # FIXME: TEST ONLY

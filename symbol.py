@@ -86,7 +86,7 @@ class Symbol:
             sym = self.sym
         try:
             self.quotes = web.DataReader(sym, "yahoo", start_date, end_date)
-        except RemoteDataError:
+        except:
             print('Error: failed to get quotes for '+sym+' from Yahoo Finance.')
             return None
         self.start_date = self.quotes.first_valid_index().date() # update start date
@@ -102,8 +102,13 @@ class Symbol:
                 if 'Exchange' in self.stats.columns:
                     self.exch = self.stats['Exchange'][self.sym]
                 else:
-                    self.get_stats() # get exchange from Yahoo Finance
+                    # get exchange from Yahoo Finance
+                    stats = get_symbol_yahoo_stats(self.sym, exclude_name=True)
+                    self.exch = stats['Exchange'][self.sym]
             exchange = get_exchange_by_sym(self.exch)
+        if exchange == None:
+            exchange = "NASDAQ" # Final resort, just a guess
+
         # e.g. https://www.google.com/finance?q=NYSE%3ACRM&fstype=ii
         site='https://www.google.com/finance?q=' + exchange + '%3A' + self.sym + '&fstype=ii'
 
@@ -244,6 +249,8 @@ class Symbol:
         """
         if self.quotes.empty:
             self.get_quotes()
+        if self.quotes.empty:
+            return 0
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         adj_close = self.quotes.loc[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close']
         if self.quotes.empty or len(adj_close) < 1:
@@ -419,7 +426,11 @@ class Symbol:
         """
         if index == None:
             index = Symbol('^GSPC', name='SP500') # S&P500
-            index.get_quotes() # only quotes needed
+        if self.quotes.empty:
+            self.get_quotes()
+        if self.quotes.empty:
+            return DataFrame()
+
         labels = ['Symbol', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'LastQuarterDivergeIndex', 'HalfYearDivergeIndex', '1YearDivergeIndex', '2YearDivergeIndex', '3YearDivergeIndex', 'YearlyDivergeIndex']
         [end_date, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
         relative_growth_one_month = self.relative_growth(index, start=one_month_ago, end=end_date)
@@ -598,6 +609,8 @@ class Symbol:
         """
         if self.quotes.empty:
             self.get_quotes()
+        if self.quotes.empty:
+            return DataFrame()
 
         labels = ['Symbol', 'EPSGrowth', 'Forward P/E', 'EarningsYield', 'ReturnOnCapital']
         eps_growth = (self.stats['EPSEstimateCurrentYear'][self.sym] - self.stats['EPS'][self.sym]) / self.stats['EPS'][self.sym] * 100 # percent
@@ -652,6 +665,9 @@ class Symbol:
         """
         if self.quotes.empty:
             self.get_quotes()
+        if self.quotes.empty:
+            print("%s: ERROR - cannot download quotes, no statistics available." %self.sym)
+            return DataFrame()
 
         # Yahoo Finance statistics - it must be downloaded before other stats
         self.stats = get_symbol_yahoo_stats([self.sym], exclude_name=exclude_name)
