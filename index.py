@@ -122,6 +122,8 @@ class Index(object):
         for sym in self.components.index:
             print('Downloading financial data for ' + sym) # FIXME: TEST ONLY
             stock = Symbol(sym)
+            if 'Exchange' in self.components.columns:
+                stock.exch = self.components['Exchange'][sym]
             stock.get_financials(exchange=exch, browser=browser)
             stock.save_financial_data()
         browser.close()
