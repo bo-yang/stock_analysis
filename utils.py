@@ -238,8 +238,8 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
     tags = ['Symbol']
     if not exclude_name:
         tags += ['Name']
-    tags += ['Exchange', 'MarketCap', 'Volume', 'AverageDailyVolume', 'BookValue', 'P/E', 'PEG', 'Price/Sales',
-            'Price/Book', 'EBITDA', 'EPS', 'EPSEstimateNextQuarter', 'EPSEstimateCurrentYear', 'EPSEstimateNextYear',
+    tags += ['MarketCap', 'Volume', 'AverageDailyVolume', 'BookValue', 'P/E', 'PEG', 'Price/Sales', 'Price/Book',
+            'EBITDA', 'EPS', 'EPSEstimateNextQuarter', 'EPSEstimateCurrentYear', 'EPSEstimateNextYear',
             'OneyrTargetPrice', 'PriceEPSEstimateCurrentYear', 'PriceEPSEstimateNextYear', 'ShortRatio',
             'Dividend/Share', 'DividendYield', 'DividendPayDate', 'ExDividendDate']
     lines = []
@@ -258,8 +258,8 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
                 continue
         if not exclude_name:
             line += [stock.get_name()]
-        line += [stock.get_stock_exchange(), str2num(stock.get_market_cap(), m2b=True),
-                str2num(stock.get_volume()), str2num(stock.get_avg_daily_volume()), str2num(stock.get_book_value()),
+        line += [str2num(stock.get_market_cap(), m2b=True), str2num(stock.get_volume()),
+                str2num(stock.get_avg_daily_volume()), str2num(stock.get_book_value()),
                 str2num(stock.get_price_earnings_ratio()), str2num(stock.get_price_earnings_growth_ratio()),
                 str2num(stock.get_price_sales()), str2num(stock.get_price_book()), str2num(stock.get_ebitda()),
                 str2num(stock.get_earnings_share()), str2num(stock.get_EPS_estimate_next_quarter()),
@@ -277,6 +277,14 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
 
 def get_symbol_yahoo_stats(symbols, exclude_name=False):
     return get_symbol_yahoo_stats_yql(symbols, exclude_name)
+
+def get_symbol_exchange(sym):
+    """
+    Download the stock exchange sym from Yahoo Finance.
+    YQL is required.
+    """
+    stock = Share(sym)
+    return stock.get_stock_exchange()
 
 def moving_average(x, n=10, type='simple'):
     """

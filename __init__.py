@@ -1,5 +1,5 @@
 from stock_analysis.utils import parse_start_end_date, get_stats_intervals
-from stock_analysis.utils import get_symbol_yahoo_stats
+from stock_analysis.utils import get_symbol_yahoo_stats, get_symbol_exchange
 from stock_analysis.utils import moving_average, find_trend
 
 from stock_analysis.symbol import Symbol

@@ -103,8 +103,7 @@ class Symbol:
                     self.exch = self.stats['Exchange'][self.sym]
                 else:
                     # get exchange from Yahoo Finance
-                    stats = get_symbol_yahoo_stats(self.sym, exclude_name=True)
-                    self.exch = stats['Exchange'][self.sym]
+                    self.exch = get_symbol_exchange(self.sym)
             exchange = get_exchange_by_sym(self.exch)
         if exchange == None:
             exchange = "NASDAQ" # Final resort, just a guess
@@ -673,7 +672,8 @@ class Symbol:
 
         # Yahoo Finance statistics - it must be downloaded before other stats
         self.stats = get_symbol_yahoo_stats([self.sym], exclude_name=exclude_name)
-        self.exch = self.stats['Exchange'][self.sym]
+        if 'Exchange' in self.stats.columns:
+            self.exch = self.stats['Exchange'][self.sym]
 
         # stats of return based on history quotes
         growth_stats = self.growth_stats(exclude_dividend=exclude_dividend)
