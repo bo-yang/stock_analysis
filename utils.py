@@ -30,6 +30,7 @@ import matplotlib.pyplot as plt
 #   GER = XETRA; FRA = Frankfurt; PNK = Other OTC; LSE = LSE
 EXCH_SYM_TO_STR = {'NMS':'NASDAQ', 'NGM':'NASDAQ', 'NCM':'NASDAQ', 'NYQ':'NYSE', 'ASE':'AMEX',
                    'GER':'XETRA', 'FRA': 'FRA', 'LSE':'LSE'}
+STR_TO_EXCH_SYM = {'NASDAQ':'NMS','NYSE':'NYQ', 'AMEX':'ASE'}
 DEFAULT_START_DATE = '2000-01-01'
 
 def get_exchange_by_sym(sym):
@@ -37,6 +38,20 @@ def get_exchange_by_sym(sym):
         return EXCH_SYM_TO_STR[sym]
     else:
         return 'NYSE'
+
+def to_date(d):
+    """
+    Convert input to datetime.date
+    """
+    if type(d) == dt.date:
+        return d
+    elif type(d) == str:
+        return pd.to_datetime(d).date()
+    elif type(d) == pd.Timestamp:
+        return d.date()
+    else:
+        print('Error: unsupported type.')
+        return dt.datetime.today().date()
 
 def parse_start_end_date(start, end):
     """

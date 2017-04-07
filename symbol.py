@@ -89,7 +89,7 @@ class Symbol:
         except:
             print('Error: failed to get quotes for '+sym+' from Yahoo Finance.')
             return None
-        self.start_date = self.quotes.first_valid_index().date() # update start date
+        self.start_date = to_date(self.quotes.first_valid_index()) # update start date
         return self.quotes
 
     def get_financials(self, exchange=None, browser=None):
@@ -387,7 +387,7 @@ class Symbol:
             return pd.Series()
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         # use the latest available starting date
-        start_date = max(self.quotes.first_valid_index().date(), index.quotes.first_valid_index().date(), start_date)
+        start_date = max(to_date(self.quotes.first_valid_index()), to_date(index.quotes.first_valid_index()), start_date)
         move_avg_index = index.ema(n, start_date, end_date).dropna()
         move_avg_symbol = self.ema(n, start_date, end_date).dropna()
         if move_avg_symbol.empty or move_avg_index.empty:
@@ -409,7 +409,7 @@ class Symbol:
             return np.nan
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         # use the latest available starting date
-        start_date = max(self.quotes.first_valid_index().date(), index.quotes.first_valid_index().date(), start_date)
+        start_date = max(to_date(self.quotes.first_valid_index()), to_date(index.quotes.first_valid_index()), start_date)
         stock_quote = self.quotes['Adj Close'][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
         index_quote = index.quotes['Adj Close'][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
         if stock_quote.empty or index_quote.empty:
@@ -428,7 +428,9 @@ class Symbol:
             index = Symbol('^GSPC', name='SP500') # S&P500
         if self.quotes.empty:
             self.get_quotes()
-        if self.quotes.empty:
+        if index.quotes.empty:
+            index.get_quotes()
+        if self.quotes.empty or index.quotes.empty:
             return DataFrame()
 
         labels = ['Symbol', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'LastQuarterDivergeIndex', 'HalfYearDivergeIndex', '1YearDivergeIndex', '2YearDivergeIndex', '3YearDivergeIndex', 'YearlyDivergeIndex']
@@ -445,7 +447,7 @@ class Symbol:
         three_year_diverge = self.diverge_to_index(index, start=three_year_ago, end=end_date).mean()
 
         yearly_diverge = 0.0
-        start_date = max(self.quotes.first_valid_index().date(), index.quotes.first_valid_index().date())
+        start_date = max(to_date(self.quotes.first_valid_index()), to_date(index.quotes.first_valid_index()) )
         days = pd.date_range(end=end_date, periods=6, freq='365D')[::-1] # The past 5 years in reverse order
         for i in range(1, len(days)):
             if days[i].date() < start_date:

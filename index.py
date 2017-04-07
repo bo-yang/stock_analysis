@@ -445,32 +445,31 @@ class NASDAQ(Index):
             os.makedirs(self.datapath)
         companylist = self.datapath + '/companylist.csv'
 
-        if update_list or not os.path.isfile(companylist):
-            # Exchange NASDAQ
+        self.components = DataFrame() # Reset components
+        if os.path.isfile(companylist) and not update_list:
+            self.components = self.components.from_csv(companylist)
+            return self.components
+
+        for exch in ['NASDAQ', 'NYSE', 'AMEX']:
+            # Download company list
             f = open(companylist,'wb')
-            link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NASDAQ&render=download'
+            link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=' + exch + '&render=download'
             response = urlopen(link)
-            nasdaq=response.read()
-            f.write(nasdaq) # save csv file
-            f.close()
-    
-            # Exchange NYSE
-            f = open(companylist,'ab')
-            link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NYSE&render=download'
-            response = urlopen(link)
-            nyse=response.read()
-            f.write(nyse) # save csv file
-            f.close()
-    
-            # Exchange AMC
-            f = open(companylist,'ab')
-            link = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=AMC&render=download'
-            response = urlopen(link)
-            amc=response.read()
-            f.write(amc) # save csv file
+            comp_list=response.read()
+            f.write(comp_list) # save csv file
             f.close()
 
-        self.components = self.components.from_csv(companylist)
+            # Insert exchange column
+            compdf = DataFrame()
+            compdf = compdf.from_csv(companylist)
+            exch_list = [STR_TO_EXCH_SYM[exch]] * len(compdf)
+            exch_col = pd.Series(exch_list, name='Exchange', index=compdf.index)
+            compdf = compdf.join(exch_col)
+
+            if self.components.empty:
+                self.components = compdf
+            else:
+                self.components = self.components.append(compdf)
 
         # delete columns
         self.components.drop('LastSale', axis=1, inplace=True)
@@ -488,6 +487,8 @@ class NASDAQ(Index):
         self.components = self.components.join(symbols)
         self.components.set_index('Symbol', inplace=True)
         self.components = self.components.drop_duplicates()
+
+        self.components.to_csv(companylist)
 
         return self.components
 
