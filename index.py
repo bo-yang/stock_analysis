@@ -117,14 +117,18 @@ class Index(object):
         """
         if self.components.empty:
             self.get_compo_list()
-        exch = None
         browser=webdriver.Chrome()
         for sym in self.components.index:
             print('Downloading financial data for ' + sym) # FIXME: TEST ONLY
             stock = Symbol(sym)
             if 'Exchange' in self.components.columns:
-                stock.exch = self.components['Exchange'][sym]
-            stock.get_financials(exchange=exch, browser=browser)
+                exch = self.components['Exchange'][sym]
+                if type(exch) == pd.Series:
+                    # unexpected duplicates, e.g. AMOV
+                    exch = exch.iloc[0]
+                if type(exch) == str:
+                    stock.exch = exch
+            stock.get_financials(browser=browser)
             stock.save_financial_data()
         browser.close()
         return
@@ -487,8 +491,8 @@ class NASDAQ(Index):
         self.components.reset_index(inplace=True)
         self.components.drop('Symbol', axis=1, inplace=True)
         self.components = self.components.join(symbols)
+        self.components = self.components.drop_duplicates(subset=['Symbol']) # drop duplicated symbols
         self.components.set_index('Symbol', inplace=True)
-        self.components = self.components.drop_duplicates()
 
         self.components.to_csv(companylist)
 
