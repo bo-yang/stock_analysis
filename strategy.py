@@ -55,6 +55,22 @@ def value_analysis(index):
     #print(stock_rank.to_string())
     return stock_rank
 
+def efficiency_level():
+    """
+    Efficiency level measures a company’s capability to transform its available input to output - a company with a favorable efficiency level is expected to provide impressive returns. Four ratios are used to find efficient companies that have the potential to provide impressive returns.
+
+    Receivables Turnover = (12-month sales) / (4-quarter average receivables), a high ratio indicates that the company efficiently collects its accounts receivables or has quality customers.
+
+    Inventory Turnover = (12-month cost of goods sold (COGS)) / (a 4-quarter average inventory), a high value of the ratio indicates a low level of inventory relative to COGS, while a low ratio signals that the company has excess inventory.
+
+    Asset Utilization = (12-month sales) / (last 4-quarter average of total assets), the higher the ratio, the greater is the chance that the company is utilizing its assets efficiently.
+
+    Operating profit margin, which is simply operating income over the past 12 months divided by sales over the same period, indicates how well a company is controlling its operating expenses.
+
+    Only consider those companies that have higher ratios than their respective industry averages.    
+    """
+    return
+
 def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
     """
     Make a table and compare stocks based on key factors.
