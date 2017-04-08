@@ -158,14 +158,18 @@ def filter_by_sort(stocks, columns, n=-1, saveto=None):
     Find out the common top n components according to the given columns(str, list or dict).
 
     n: number of the top components for each columns
-    columns: str, list or dict. By default all given columns will be sorted by descending order.
+    columns: str, list or dict.
+    
+    By default all given columns will be sorted by *descending* order.
              To specify different orders for different columns, a dict can be used.
+
     For example:
         cheap={'AvgQuarterlyReturn':False, 'LastQuarterReturn':True, 'PriceIn52weekRange':True}
         reliable={'MedianQuarterlyReturn':False, 'AvgQuarterlyReturn':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyDivergeIndex':False}
         reliable=['HalfYearDivergeIndex', '1YearDivergeIndex','2YearDivergeIndex', '3YearDivergeIndex','YearlyDivergeIndex']
         buy={'AvgQuarterlyReturn':False, 'MedianQuarterlyReturn':False, 'PriceIn52weekRange':True, 'AvgFSTOLastMonth':True}
         value = {'EarningsYield':False, 'ReturnOnCapital':False, 'EPSGrowth':False}
+        score = {'AvgQuarterlyReturn':False, 'Total': True}
     where 'True' means ascending=True, and 'False' means ascending=False.
     """
     if type(stocks) == pd.DataFrame:
@@ -179,13 +183,9 @@ def filter_by_sort(stocks, columns, n=-1, saveto=None):
 
     stocks = index.filter_by_sort(columns, n, saveto=None)
 
-    if saveto != None and len(common) > 0:
-        if issubclass(type(stocks), Index):
-            f = os.path.normpath(stocks.datapath + '/' + saveto)
-        else:
-            f = saveto
-        stocks.loc[common].to_csv(f)
-    return components.loc[common] # DataFrame of common stocks
+    if saveto != None and len(stocks) > 0:
+        stocks.to_csv(saveto)
+    return stocks # DataFrame of common stocks
 
 def filter_by_compare(stocks, rules, saveto=None):
     """

@@ -257,10 +257,11 @@ class Index(object):
                 return DataFrame() # Nothing in common
             common = pd.Index(common_list)
 
-        if saveto != None and len(common) > 0:
+        components = components.loc[common]
+        if saveto != None and len(components) > 0:
             f = os.path.normpath(self.datapath + '/' + saveto)
-            common.to_csv(f)
-        return common # DataFrame of common stocks
+            components.to_csv(f)
+        return components # DataFrame of common stocks
 
     def filter_by_compare(self, rules, saveto=None):
         """
