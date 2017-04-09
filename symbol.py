@@ -613,7 +613,7 @@ class Symbol:
         if self.quotes.empty:
             return DataFrame()
 
-        labels = ['Symbol', 'EPSGrowth', 'Forward P/E', 'EarningsYield', 'ReturnOnCapital']
+        labels = ['Symbol', 'EPSGrowth', 'Forward P/E', 'EarningsYield', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
         eps_growth = (self.stats['EPSEstimateCurrentYear'][self.sym] - self.stats['EPS'][self.sym]) / self.stats['EPS'][self.sym] * 100 # percent
         # Forward P/E = (current price / EPS estimate next year)
         forward_pe = self.quotes['Adj Close'][-1] / self.stats['EPSEstimateCurrentYear'][self.sym]
@@ -636,7 +636,27 @@ class Symbol:
         #   ROIC = (Net Income - Dividends) / TotalCapital
         # where,
         #   InvestedCapital = FixedAssets + IntangibleAssets + CurrentAssets - CurrentLiabilities - Cash
+
+        # Receivables Turnover:
+        #   Receivables Turnover = (12-month sales) / (4-quarter average receivables)
+        # a high ratio indicates that the company efficiently collects its accounts receivables or has quality customers.
+
+        # Inventory Turnover:
+        #   Inventory Turnover = (12-month cost of goods sold (COGS)) / (a 4-quarter average inventory)
+        # a high value of the ratio indicates a low level of inventory relative to COGS, while a low ratio
+        # signals that the company has excess inventory.
+
+        # Asset Utilization = (12-month sales) / (12-month average of total assets)
+        # the higher the ratio, the greater is the chance that the company is utilizing its assets efficiently.
+
+        # Operating profit margin = (12-month operating income) / (12-month sales)
+        # indicates how well a company is controlling its operating expenses.
+
         roic = 0
+        receivables_turnover = 0
+        inventory_turnover = 0
+        asset_utilization = 0
+        operating_profit_margin = 0
         if not (self.income.empty or self.balance.empty or self.cashflow.empty):
             #net_income = financial_fmt(self.income.loc['Net Income'])
             operating_income = financial_fmt(self.income.loc['Operating Income']) # TODO: need a reliable way to cover negative operting income
@@ -644,6 +664,13 @@ class Symbol:
             total_assets = financial_fmt(self.balance.loc['Total Assets'])
             total_liabilities = financial_fmt(self.balance.loc['Total Liabilities'])
             #cash_from_operating = financial_fmt(self.cashflow.loc['Cash from Operating Activities'])
+            total_receivables = financial_fmt(self.balance.loc['Total Receivables, Net'])
+            total_inventory = financial_fmt(self.balance.loc['Total Inventory'])
+            if '-' not in self.income.loc['Total Revenue'].tolist():
+                total_sales = financial_fmt(self.income.loc['Total Revenue'])
+            else:
+                total_sales = financial_fmt(self.income.loc['Revenue'])
+            total_cost = financial_fmt(self.income.loc['Cost of Revenue, Total'])
             cash = 0 # TODO: calculate total cash
             l = min(len(operating_income), len(total_assets), len(total_liabilities))
             if l > 0:
@@ -652,7 +679,19 @@ class Symbol:
                 roic = np.divide((operating_income[:l] - adjusted_tax[:l]), invested_capital)
                 roic = np.mean(roic) * 4 # 1 year return on capital
 
-        stat = [[self.sym, eps_growth, forward_pe, earnings_yield, roic]]
+                receivables_turnover = np.divide(total_sales, total_receivables)
+                receivables_turnover = np.mean(receivables_turnover) * 4 # 12-month
+
+                inventory_turnover = np.divide(total_cost, total_inventory)
+                inventory_turnover = np.mean(inventory_turnover) * 4 # 12-month
+
+                asset_utilization = np.divide(total_sales, total_assets)
+                asset_utilization = np.mean(asset_utilization) * 4 # 12-month
+
+                operating_profit_margin = np.divide(operating_income, total_sales)
+                operating_profit_margin = np.mean(operating_profit_margin) * 4 # 12-month
+
+        stat = [[self.sym, eps_growth, forward_pe, earnings_yield, roic, receivables_turnover, inventory_turnover, asset_utilization, operating_profit_margin]]
         stat = DataFrame(stat, columns=labels)
         stat.drop_duplicates(inplace=True)
         stat.set_index('Symbol', inplace=True)
