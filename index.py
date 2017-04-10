@@ -493,8 +493,8 @@ class NASDAQ(Index):
         self.components.drop('Symbol', axis=1, inplace=True)
         self.components = self.components.join(symbols)
         self.components = self.components.drop_duplicates(subset=['Symbol']) # drop duplicated symbols
-        self.components.sort_index(inplace=True) # sort symbols alphabetically
         self.components.set_index('Symbol', inplace=True)
+        self.components.sort_index(inplace=True) # sort symbols alphabetically
 
         self.components.to_csv(companylist)
 
