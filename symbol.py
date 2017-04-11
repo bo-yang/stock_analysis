@@ -679,16 +679,24 @@ class Symbol:
                 roic = np.divide((operating_income[:l] - adjusted_tax[:l]), invested_capital)
                 roic = np.mean(roic) * 4 # 1 year return on capital
 
-                receivables_turnover = np.divide(total_sales, total_receivables)
+            l = min(len(total_sales), len(total_receivables))
+            if l > 0:
+                receivables_turnover = np.divide(total_sales[:l], total_receivables[:l])
                 receivables_turnover = np.mean(receivables_turnover) * 4 # 12-month
 
-                inventory_turnover = np.divide(total_cost, total_inventory)
+            l = min(len(total_cost), len(total_inventory))
+            if l > 0:
+                inventory_turnover = np.divide(total_cost[:l], total_inventory[:l])
                 inventory_turnover = np.mean(inventory_turnover) * 4 # 12-month
 
-                asset_utilization = np.divide(total_sales, total_assets)
+            l = min(len(total_sales), len(total_assets))
+            if l > 0:
+                asset_utilization = np.divide(total_sales[:l], total_assets[:l])
                 asset_utilization = np.mean(asset_utilization) * 4 # 12-month
 
-                operating_profit_margin = np.divide(operating_income, total_sales)
+            l = min(len(operating_income), len(total_sales))
+            if l > 0:
+                operating_profit_margin = np.divide(operating_income[:l], total_sales[:l])
                 operating_profit_margin = np.mean(operating_profit_margin) * 4 # 12-month
 
         stat = [[self.sym, eps_growth, forward_pe, earnings_yield, roic, receivables_turnover, inventory_turnover, asset_utilization, operating_profit_margin]]

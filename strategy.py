@@ -55,7 +55,7 @@ def value_analysis(index):
     #print(stock_rank.to_string())
     return stock_rank
 
-def efficiency_level():
+def efficiency_level(stocks, saveto=None):
     """
     Efficiency level measures a company’s capability to transform its available input to output - a company with a favorable efficiency level is expected to provide impressive returns. Four ratios are used to find efficient companies that have the potential to provide impressive returns.
 
@@ -69,7 +69,9 @@ def efficiency_level():
 
     Only consider those companies that have higher ratios than their respective industry averages.    
     """
-    return
+    rule = {'ReceivablesTurnover':True, 'InventoryTurnover':True, 'AssetUtilization':True, 'OperatingProfitMargin':True}
+
+    return ranking(stocks, tags=rule, rank='range', saveto=saveto)
 
 def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
     """
