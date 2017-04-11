@@ -67,7 +67,11 @@ def efficiency_level(stocks, saveto=None):
 
     Operating profit margin, which is simply operating income over the past 12 months divided by sales over the same period, indicates how well a company is controlling its operating expenses.
 
-    Only consider those companies that have higher ratios than their respective industry averages.    
+    Only consider those companies that have higher ratios than their respective industry averages.
+
+    Example:
+        nasdaq_value = value_analysis(nasdaq)
+        stocks = efficiency_level(nasdaq.components.loc[nasdaq_value.index[:400]], saveto='data/stocks_value.csv')
     """
     rule = {'ReceivablesTurnover':True, 'InventoryTurnover':True, 'AssetUtilization':True, 'OperatingProfitMargin':True}
 
@@ -104,7 +108,7 @@ def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
 def ranking_by_range(symbols, tags):
     """
     Make a table and compare stocks based on key factors.
-    For each column, the stocks are given a score between [0 - 10], and the total scores are computed for each column.
+    For each column, the stocks are given a score between [0 - 100], and the total scores are computed for each column.
     """
     table = DataFrame()
     for t in tags.keys():
@@ -114,10 +118,10 @@ def ranking_by_range(symbols, tags):
         symbols[t].replace(np.nan, maxrange/2, inplace=True) # replace NaN with mean
         if tags[t]:
             # the larger the better
-            col = np.round((symbols[t] - col_min) / maxrange * 10)
+            col = np.round((symbols[t] - col_min) / maxrange * 100)
         else:
             # the smaller the better
-            col = np.round((col_max - symbols[t]) / maxrange * 10)
+            col = np.round((col_max - symbols[t]) / maxrange * 100)
         if table.empty:
             table = table.append(col).transpose()
         else:
