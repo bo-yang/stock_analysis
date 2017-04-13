@@ -27,6 +27,10 @@ def value_analysis(index):
         rule = [('EPS', '>', 0)]
     stocks_value = index.filter_by_compare(rule)
 
+    # Append stocks that MarketCap not available
+    rule = [('MarketCap', '==', 0), ('Volume', '>', 0), ('EPS', '>', 0)]
+    stocks_value = stocks_value.append(index.filter_by_compare(rule))
+
     # Drop foreign companies
     if 'ADR TSO' in stocks_value.columns:
         m = stocks_value['ADR TSO'] == 'n/a'
@@ -72,6 +76,7 @@ def efficiency_level(stocks, saveto=None):
     Example:
         nasdaq_value = value_analysis(nasdaq)
         stocks = efficiency_level(nasdaq.components.loc[nasdaq_value.index[:400]], saveto='data/stocks_value.csv')
+        stocks = efficiency_level(sp500.components.loc[sp500_value.index[:100]], saveto='data/stocks_value.csv')
     """
     rule = {'ReceivablesTurnover':True, 'InventoryTurnover':True, 'AssetUtilization':True, 'OperatingProfitMargin':True}
 
@@ -115,7 +120,7 @@ def ranking_by_range(symbols, tags):
         col_max = symbols[t].max()
         col_min = symbols[t].min()
         maxrange = col_max - col_min
-        symbols[t].replace(np.nan, maxrange/2, inplace=True) # replace NaN with mean
+        symbols[t].replace(np.nan, maxrange/2, inplace=True) # replace NaN by mean
         if tags[t]:
             # the larger the better
             col = np.round((symbols[t] - col_min) / maxrange * 100)
@@ -141,7 +146,10 @@ def ranking_by_sort(symbols, tags):
     table = DataFrame()
     rank = pd.Series()
     for t in tags.keys():
-        col = symbols[t].replace(np.nan, 0) # replace NaN with mean
+        col_max = symbols[t].max()
+        col_min = symbols[t].min()
+        maxrange = col_max - col_min
+        col = symbols[t].replace(np.nan, maxrange/2) # replace NaN by mean
         col = col.sort_values(ascending=(not tags[t]))
         rank_col = pd.Series(np.arange(len(col)), name=t+'Score', index=col.index)
         rank_col = rank_col.sort_index()

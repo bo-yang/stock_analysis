@@ -292,7 +292,7 @@ class Index(object):
                 '//=': operator.ifloordiv }
         operate = lambda x,oper,y: ops[oper](x, y)
     
-        stats = self.components
+        stats = self.components.replace(np.nan, 0) # np.nan is not comparable
         for rule in rules:
             if len(rule) != 3:
                 continue # not 3-tuple
