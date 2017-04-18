@@ -24,7 +24,7 @@ def value_analysis(index):
     if type(index) == NASDAQ:
         rule = [('EPS', '>', 0), ('MarketCap', '>', 1)]
     else:
-        rule = [('EPS', '>', 0)]
+        rule = [('EPS', '>', 0), ('MarketCap', '>', 0)]
     stocks_value = index.filter_by_compare(rule)
 
     # Append stocks that MarketCap not available
@@ -38,7 +38,7 @@ def value_analysis(index):
     stocks_value.drop(blacklist, inplace=True, errors='ignore')
 
     # Drop smaller financial/utitlity/transportation companies
-    sectors = ['Finance', 'Public Utilities', 'Transportation']
+    sectors = ['Finance', 'Public Utilities', 'Transportation', 'Energy']
     for sec in sectors:
         rule = [('Sector', '==', sec), ('MarketCap', '<', 8)]
         small_companies = index.filter_by_compare(rule)
