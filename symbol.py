@@ -323,12 +323,16 @@ class Symbol:
 
         adj_close = self.quotes.loc[one_year_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close'].dropna()
         if not adj_close.empty and len(adj_close) > 0:
-            last_year_growth = adj_close[-1] - adj_close[0]
             current = adj_close[-1]
+            last_year_growth = current - adj_close[0]
             # Current price in 52-week range should between [0, 1] - larger number means more expensive.
             pos_in_range = (current - adj_close.min()) / (adj_close.max() - adj_close.min())
+
             adj_close = self.quotes.loc[three_month_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close'].dropna()
-            last_quarter_growth = adj_close[-1] - adj_close[0]
+            if not adj_close.empty and len(adj_close) > 0:
+                last_quarter_growth = adj_close[-1] - adj_close[0]
+            else:
+                last_quarter_growth = np.nan
         else:
             pos_in_range = np.nan
             last_year_growth = np.nan
