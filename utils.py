@@ -119,10 +119,12 @@ def str2num(s, m2b=False):
         '158.86B' => 158.86
         '158.86M' => 0.15886
     """
-    if s == None or len(s) == 0:
+    if s == None:
         return np.nan
-    if type(s) == int or type(s) == float:
+    if type(s) == int or type(s) == float or type(s) == np.float64:
         return s
+    if len(s) == 0:
+        return np.nan
     if type(s) != str:
         print('Error: str2num: inavlid input.')
         return np.nan
@@ -336,7 +338,7 @@ def find_trend(y, fit_poly=True):
     """
     if len(y) < 2:
         return 0
-    if np.inf in list(y):
+    if (True in np.isinf(list(y))) or (True in np.isnan(list(y))):
         return np.nan
 
     counts = len(y)
