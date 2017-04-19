@@ -141,7 +141,15 @@ def str2num(s, m2b=False):
     num = s.replace(',','').replace('-','').replace('+','').replace('%','').replace('M','').replace('B','')
     return float(num)*factor
 
-financial_fmt = lambda y: pd.Series([str(x).replace(',','').replace('-','0') for x in y], index=y.index)[::-1].astype(np.float)
+#financial_fmt = lambda y: pd.Series([str(x).replace(',','').replace('-','0') for x in y], index=y.index)[::-1].astype(np.float)
+def financial_fmt(y):
+    """
+    Convert Google Financial inputs(Pandas Series) into a Series of numbers.
+    """
+    out = []
+    for s in y:
+        out.append(str2num(s))
+    return pd.Series(out, index=y.index)[::-1]
 
 def min_max_norm(x):
     """
