@@ -82,6 +82,24 @@ def efficiency_level(stocks, saveto=None):
 
     return ranking(stocks, tags=rule, rank='range', saveto=saveto)
 
+def grow_and_value(index, ref_index):
+    """
+    Filter out fast growing stocks with value analysis.
+    index: Index to be analyzed, e.g. sp500/sp400/NASDAQ
+    ref_index: reference index for value analysis, can be the same as index
+    """
+    if not issubclass(type(index), Index) or not issubclass(type(ref_index), Index):
+        print('Error: only Index type is supported.')
+        return DataFrame()
+
+
+    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.05)]
+    index_grow = filter_by_compare(index, rules)
+    ref_value = value_analysis(ref_index)
+    index_value_grow = ref_value.loc[index_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
+
+    return index_value_grow
+
 def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
     """
     Make a table and compare stocks based on key factors.
@@ -214,12 +232,6 @@ def filter_by_compare(stocks, rules, saveto=None):
         rules = [('AvgQuarterlyReturn', '>', 0.03), ('MedianQuarterlyReturn', '>', 0.03), ('PriceIn52weekRange', '<=', 0.8)]
         rules = [('EPS', '>=', 0), ('MarketCap', '>', 2), ('AvgMonthlyReturn', '>', 0.007), ('AvgQuarterlyReturn', '>', 0.04), ('MedianQuarterlyReturn', '>', 0.04)]
         rules = [('EPS', '>=', 0), ('MarketCap', '>', 2)]
-
-        rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.05)]
-        sp500_grow = filter_by_compare(sp500, rules)
-        sp500_value = value_analysis(sp500)
-        print(sp500_value.loc[sp500_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].to_string())
-
     """
     if type(stocks) == pd.DataFrame:
         index = Index()
