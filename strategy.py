@@ -75,7 +75,7 @@ def efficiency_level(stocks, saveto=None):
 
     Example:
         nasdaq_value = value_analysis(nasdaq)
-        stocks = efficiency_level(nasdaq.components.loc[nasdaq_value.index[:400]], saveto='data/stocks_value.csv')
+        stocks = efficiency_level(nasdaq.components.loc[nasdaq_value.index[:800]], saveto='data/stocks_value.csv')
         stocks = efficiency_level(sp500.components.loc[sp500_value.index[:100]], saveto='data/stocks_value.csv')
     """
     rule = {'ReceivablesTurnover':True, 'InventoryTurnover':True, 'AssetUtilization':True, 'OperatingProfitMargin':True}
@@ -214,6 +214,12 @@ def filter_by_compare(stocks, rules, saveto=None):
         rules = [('AvgQuarterlyReturn', '>', 0.03), ('MedianQuarterlyReturn', '>', 0.03), ('PriceIn52weekRange', '<=', 0.8)]
         rules = [('EPS', '>=', 0), ('MarketCap', '>', 2), ('AvgMonthlyReturn', '>', 0.007), ('AvgQuarterlyReturn', '>', 0.04), ('MedianQuarterlyReturn', '>', 0.04)]
         rules = [('EPS', '>=', 0), ('MarketCap', '>', 2)]
+
+        rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.05)]
+        sp500_grow = filter_by_compare(sp500, rules)
+        sp500_value = value_analysis(sp500)
+        print(sp500_value.loc[sp500_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].to_string())
+
     """
     if type(stocks) == pd.DataFrame:
         index = Index()

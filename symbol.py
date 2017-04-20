@@ -577,7 +577,6 @@ class Symbol:
             cash_financing = financial_fmt(self.cashflow.loc['Cash from Financing Activities'])
 
         if len(revenue) > 0:
-            print('financial_stats: find profit margin trend for %s' %self.sym) # FIXME: TEST ONLY
             revenue_momentum = find_trend(revenue, fit_poly=False)
             profit_margins = net_income / revenue
             profit_margin_moment = find_trend(profit_margins.dropna(), fit_poly=False)
