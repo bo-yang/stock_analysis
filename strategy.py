@@ -92,7 +92,6 @@ def grow_and_value(index, ref_index):
         print('Error: only Index type is supported.')
         return DataFrame()
 
-
     rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.05)]
     index_grow = filter_by_compare(index, rules)
     ref_value = value_analysis(ref_index)
@@ -223,6 +222,7 @@ def filter_by_compare(stocks, rules, saveto=None):
     """
     Filtering stocks by comparing columns.
 
+    stocks: DataFrame or Index
     rules: list of three-tuple, where the tuples are like (attribute1, oper, attribute2 or expression).
 
     For example:
