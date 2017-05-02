@@ -92,12 +92,25 @@ def grow_and_value(index, ref_index):
         print('Error: only Index type is supported.')
         return DataFrame()
 
-    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.05)]
+    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03)]
     index_grow = filter_by_compare(index, rules)
     ref_value = value_analysis(ref_index)
-    index_value_grow = ref_value.loc[index_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
+    index_value_grow = ref_value.loc[index_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].dropna()
 
     return index_value_grow
+
+def turnover_and_value(index):
+    """
+    Filter out stocks that bounce back or grow faster.
+    """
+    if not issubclass(type(index), Index):
+        print('Error: only Index type is supported.')
+        return DataFrame()
+    rules = [('LastQuarterDivergeIndex', '>', 0), ('LastQuarterDivergeIndex', '>=', ('HalfYearDivergeIndex', '*=', 0.6)), ('LastQuarterDivergeIndex', '>=', ('1YearDivergeIndex', '*=', 0.4))]
+    index_grow = filter_by_compare(index, rules)
+    index_value = value_analysis(index)
+    stocks = index_value.loc[index_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].dropna()
+    return stocks
 
 def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
     """
