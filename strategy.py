@@ -53,7 +53,7 @@ def value_analysis(index):
 
     # Ranking stocks
     stock_rank = ranking(stocks_value, tags=rank_tags_value, rank='sort')
-    stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['AvgQuarterlyReturn', 'PriceIn52weekRange', 'Sector', 'Industry']])
+    stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange', 'Sector', 'Industry']])
     saveto = 'data/%s_value.csv' %index.name
     stock_rank.to_csv(saveto)
     #print(stock_rank.to_string())
@@ -115,7 +115,7 @@ def grow_and_value(index, ref_index, dropna=True):
     rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1), ('RelativeGrowthLastMonth','>', 1), ('RelativeGrowthLastWeek','>=', 0.95)]
     index_grow = filter_by_compare(index, rules)
     ref_value = value_analysis(ref_index)
-    index_value_grow = ref_value.loc[index_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
+    index_value_grow = ref_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
     if dropna:
         return index_value_grow.dropna()
     else:
