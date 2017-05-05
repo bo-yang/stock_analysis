@@ -22,7 +22,7 @@ def value_analysis(index):
         return DataFrame()
 
     if type(index) == NASDAQ:
-        rule = [('EPS', '>', 0), ('MarketCap', '>', 2)]
+        rule = [('EPS', '>', 0), ('MarketCap', '>', 1)]
     else:
         rule = [('EPS', '>', 0), ('MarketCap', '>', 0)]
     stocks_value = index.filter_by_compare(rule)
@@ -82,7 +82,22 @@ def efficiency_level(stocks, saveto=None):
 
     return ranking(stocks, tags=rule, rank='range', saveto=saveto)
 
-def grow_and_value(index, ref_index):
+def check_relative_growth(sym, index=NASDAQ()):
+    """
+    Check relative growth.
+    """
+    if not issubclass(type(index), Index):
+        print('Error: only Index type is supported.')
+        return pd.Series()
+    if index.components.empty:
+        index.load_data()
+    if sym not in index.components.index:
+        print('Error: %s not in index.' %sym)
+        return pd.Series()
+    stat = index.components.loc[sym]
+    return stat.loc[['RelativeGrowthLastWeek', 'RelativeGrowthLastMonth','RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear']]
+
+def grow_and_value(index, ref_index, dropna=True):
     """
     Filter out fast growing stocks with value analysis. This strategy picks
     1. Stocks that have solid fundamentals and outperform their respective industries or benchmarks.
@@ -97,12 +112,14 @@ def grow_and_value(index, ref_index):
         return DataFrame()
 
     # fast growing stocks that still outperform the index recently
-    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastQuarter', '>', 1), ('RelativeGrowthLastMonth','>', 1), ('RelativeGrowthLastWeek','>=', 1)]
+    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1), ('RelativeGrowthLastMonth','>', 1), ('RelativeGrowthLastWeek','>=', 0.95)]
     index_grow = filter_by_compare(index, rules)
     ref_value = value_analysis(ref_index)
-    index_value_grow = ref_value.loc[index_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].dropna()
-
-    return index_value_grow
+    index_value_grow = ref_value.loc[index_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
+    if dropna:
+        return index_value_grow.dropna()
+    else:
+        return index_value_grow
 
 def turnover_and_value(index):
     """
