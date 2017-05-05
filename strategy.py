@@ -22,7 +22,7 @@ def value_analysis(index):
         return DataFrame()
 
     if type(index) == NASDAQ:
-        rule = [('EPS', '>', 0), ('MarketCap', '>', 1)]
+        rule = [('EPS', '>', 0), ('MarketCap', '>', 2)]
     else:
         rule = [('EPS', '>', 0), ('MarketCap', '>', 0)]
     stocks_value = index.filter_by_compare(rule)
@@ -84,7 +84,11 @@ def efficiency_level(stocks, saveto=None):
 
 def grow_and_value(index, ref_index):
     """
-    Filter out fast growing stocks with value analysis.
+    Filter out fast growing stocks with value analysis. This strategy picks
+    1. Stocks that have solid fundamentals and outperform their respective industries or benchmarks.
+    2. Determine whether or not a stock has relevant upside potential by comparing that stock with S&P 500 over a period of at least 1 to 3 months.
+    3. Find out whether analysts are still optimistic about the upcoming earning results of the stocks(not implemented yet).
+
     index: Index to be analyzed, e.g. sp500/sp400/NASDAQ
     ref_index: reference index for value analysis, can be the same as index
     """
@@ -92,7 +96,8 @@ def grow_and_value(index, ref_index):
         print('Error: only Index type is supported.')
         return DataFrame()
 
-    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03)]
+    # fast growing stocks that still outperform the index recently
+    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastQuarter', '>', 1), ('RelativeGrowthLastMonth','>', 1), ('RelativeGrowthLastWeek','>=', 1)]
     index_grow = filter_by_compare(index, rules)
     ref_value = value_analysis(ref_index)
     index_value_grow = ref_value.loc[index_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].dropna()

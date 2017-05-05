@@ -81,6 +81,7 @@ def get_stats_intervals(end=None):
         end_date = dt.date.today()
     else:
         end_date = end
+    one_week_ago = end_date - dt.timedelta(days=7)
     one_month_ago = end_date - dt.timedelta(days=30)
     three_month_ago = end_date - dt.timedelta(days=90)
     half_year_ago = end_date - dt.timedelta(days=180)
@@ -88,7 +89,7 @@ def get_stats_intervals(end=None):
     two_year_ago = end_date - dt.timedelta(days=365*2)
     three_year_ago = end_date - dt.timedelta(days=365*3)
     five_year_ago = end_date - dt.timedelta(days=365*5)
-    return [end_date, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago]
+    return [end_date, one_week_ago, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago]
 
 def str2list(symbols, split='+'):
     """
@@ -247,24 +248,25 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
     # Yahoo Finance tags, refer to http://www.financialwisdomforum.org/gummy-stuff/Yahoo-data.htm
     tags = ['Symbol']
     if not exclude_name:
-        tags += ['Name']
-    tags += ['MarketCap', 'Volume', 'AverageDailyVolume', 'BookValue', 'P/E', 'PEG', 'Price/Sales', 'Price/Book',
+        tags += ['Name'] 
+    real_tags = ['MarketCap', 'Volume', 'AverageDailyVolume', 'BookValue', 'P/E', 'PEG', 'Price/Sales', 'Price/Book',
             'EBITDA', 'EPS', 'EPSEstimateNextQuarter', 'EPSEstimateCurrentYear', 'EPSEstimateNextYear',
             'OneyrTargetPrice', 'PriceEPSEstimateCurrentYear', 'PriceEPSEstimateNextYear', 'ShortRatio',
             'Dividend/Share', 'DividendYield', 'DividendPayDate', 'ExDividendDate']
+    tags += real_tags
     lines = []
     for sym in sym_list:
         line = [sym]
         try:
             stock = Share(sym)
         except:
-            print('Warning: YQL query %s failure, try again.' %sym)
+            print('Warning: YQL query faied for %s, try again...' %sym)
             time.sleep(1)
             try:
                 stock = Share(sym)
             except:
-                print('Error: failed to get stats from YQL for sym %s.' %sym)
-                lines.append(line)
+                print('!!!Error: failed to get stats from YQL for sym %s!!!' %sym)
+                lines.append([0]*len(real_tags))
                 continue
         if not exclude_name:
             line += [stock.get_name()]

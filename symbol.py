@@ -299,7 +299,7 @@ class Symbol:
         """
         Additional stats that calculated based on history price.
         """
-        labels = ['Symbol', 'LastMonthReturn', 'LastQuarterReturn', 'HalfYearReturn', '1YearReturn', '2YearReturn', '3YearReturn', 'AvgMonthlyReturn', 'MedianMonthlyReturn', 'AvgQuarterlyReturn', 'MedianQuarterlyReturn', 'AvgYearlyReturn', 'MedianYearlyReturn', 'PriceIn52weekRange', 'LastQuarterGrowth', 'LastYearGrowth']
+        labels = ['Symbol', 'LastWeekReturn', 'LastMonthReturn', 'LastQuarterReturn', 'HalfYearReturn', '1YearReturn', '2YearReturn', '3YearReturn', 'AvgMonthlyReturn', 'MedianMonthlyReturn', 'AvgQuarterlyReturn', 'MedianQuarterlyReturn', 'AvgYearlyReturn', 'MedianYearlyReturn', 'PriceIn52weekRange', 'LastQuarterGrowth', 'LastYearGrowth']
         if self.quotes.empty:
             self.get_quotes()
         if self.quotes.empty:
@@ -308,8 +308,9 @@ class Symbol:
             stats = DataFrame([st.tolist()], columns=labels)
             return stats
 
-        [end_date, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
+        [end_date, one_week_ago, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
 
+        last_week_return = self.return_on_investment(one_week_ago, end_date, exclude_dividend)
         last_month_return = self.return_on_investment(one_month_ago, end_date, exclude_dividend)
         quarter_return = self.return_on_investment(three_month_ago, end_date, exclude_dividend)
         half_year_return = self.return_on_investment(half_year_ago, end_date, exclude_dividend)
@@ -338,9 +339,9 @@ class Symbol:
             last_year_growth = np.nan
             last_quarter_growth = np.nan
 
-        st = [[self.sym, last_month_return, quarter_return, half_year_return, one_year_return, two_year_return, three_year_return,
-               monthly_ret_avg, monthly_ret_median, quart_ret_avg, quart_ret_median, yearly_ret_avg, yearly_ret_median, pos_in_range,
-               last_quarter_growth, last_year_growth]]
+        st = [[self.sym, last_week_return, last_month_return, quarter_return, half_year_return, one_year_return, two_year_return,
+               three_year_return, monthly_ret_avg, monthly_ret_median, quart_ret_avg, quart_ret_median, yearly_ret_avg, yearly_ret_median,
+               pos_in_range, last_quarter_growth, last_year_growth]]
         stats = DataFrame(st, columns=labels)
         stats = stats.drop_duplicates()
         stats = stats.set_index('Symbol')
@@ -436,8 +437,9 @@ class Symbol:
         if self.quotes.empty or index.quotes.empty:
             return DataFrame()
 
-        labels = ['Symbol', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'LastQuarterDivergeIndex', 'HalfYearDivergeIndex', '1YearDivergeIndex', '2YearDivergeIndex', '3YearDivergeIndex', 'YearlyDivergeIndex']
-        [end_date, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
+        labels = ['Symbol', 'RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'LastQuarterDivergeIndex', 'HalfYearDivergeIndex', '1YearDivergeIndex', '2YearDivergeIndex', '3YearDivergeIndex', 'YearlyDivergeIndex']
+        [end_date, one_week_ago, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
+        relative_growth_one_week = self.relative_growth(index, start=one_week_ago, end=end_date)
         relative_growth_one_month = self.relative_growth(index, start=one_month_ago, end=end_date)
         relative_growth_last_quarter = self.relative_growth(index, start=three_month_ago, end=end_date)
         relative_growth_half_year = self.relative_growth(index, start=half_year_ago, end=end_date)
@@ -462,7 +464,7 @@ class Symbol:
                 break
         yearly_diverge /= i
 
-        stats = [[self.sym, relative_growth_one_month, relative_growth_last_quarter, relative_growth_half_year,
+        stats = [[self.sym, relative_growth_one_week, relative_growth_one_month, relative_growth_last_quarter, relative_growth_half_year,
                   relative_growth_last_year, last_quarter_diverge, half_year_diverge, one_year_diverge, two_year_diverge,
                   three_year_diverge, yearly_diverge]]
         stats_df = DataFrame(stats, columns=labels)
