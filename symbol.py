@@ -388,14 +388,14 @@ class Symbol:
         if index.quotes.empty:
             index.get_quotes()
         if self.quotes.empty or index.quotes.empty:
-            return pd.Series()
+            return np.nan
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         # use the latest available starting date
         start_date = max(to_date(self.quotes.first_valid_index()), to_date(index.quotes.first_valid_index()), start_date)
         move_avg_index = index.ema(n, start_date, end_date).dropna()
         move_avg_symbol = self.ema(n, start_date, end_date).dropna()
         if move_avg_symbol.empty or move_avg_index.empty:
-            return pd.Series()
+            return np.nan
         move_avg_index /= move_avg_index[0] # normalization
         move_avg_symbol /= move_avg_symbol[0] # normalization
         diff = move_avg_symbol - move_avg_index

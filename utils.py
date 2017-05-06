@@ -254,9 +254,11 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
             'OneyrTargetPrice', 'PriceEPSEstimateCurrentYear', 'PriceEPSEstimateNextYear', 'ShortRatio',
             'Dividend/Share', 'DividendYield', 'DividendPayDate', 'ExDividendDate']
     tags += real_tags
+
     lines = []
     for sym in sym_list:
         line = [sym]
+        # download stats
         try:
             stock = Share(sym)
         except:
@@ -266,7 +268,10 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
                 stock = Share(sym)
             except:
                 print('!!!Error: failed to get stats from YQL for sym %s!!!' %sym)
-                lines.append([0]*len(real_tags))
+                if not exclude_name:
+                    line += ["N/A"]
+                line += [0]*len(real_tags)
+                lines.append(line)
                 continue
         if not exclude_name:
             line += [stock.get_name()]

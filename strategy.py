@@ -95,9 +95,9 @@ def check_relative_growth(sym, index=NASDAQ()):
         print('Error: %s not in index.' %sym)
         return pd.Series()
     stat = index.components.loc[sym]
-    return stat.loc[['RelativeGrowthLastWeek', 'RelativeGrowthLastMonth','RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear']]
+    return stat.loc[['RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'RelativeGrowthLast2Years', 'RelativeGrowthLast3Years', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth']]
 
-def grow_and_value(index, ref_index, dropna=True):
+def grow_and_value(index, ref_index=NASDAQ(), dropna=True):
     """
     Filter out fast growing stocks with value analysis. This strategy picks
     1. Stocks that have solid fundamentals and outperform their respective industries or benchmarks.
@@ -110,9 +110,11 @@ def grow_and_value(index, ref_index, dropna=True):
     if not issubclass(type(index), Index) or not issubclass(type(ref_index), Index):
         print('Error: only Index type is supported.')
         return DataFrame()
+    if ref_index.components.empty:
+        ref_index = index # value analysis of itself
 
     # fast growing stocks that still outperform the index recently
-    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1), ('RelativeGrowthLastMonth','>', 1), ('RelativeGrowthLastWeek','>=', 0.95)]
+    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1), ('RelativeGrowthLastMonth','>', 1), ('RelativeGrowthLastWeek','>=', 0.9), ('WeeklyRelativeGrowth', '>', 1)]
     index_grow = filter_by_compare(index, rules)
     ref_value = value_analysis(ref_index)
     index_value_grow = ref_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
