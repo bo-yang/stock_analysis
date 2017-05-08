@@ -11,7 +11,7 @@ rank_tags_hybrid2 = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'R
 
 blacklist = ['WINS', 'ENIC', 'LEXEB', 'LAUR', 'BGCA', 'AEK', 'MBT', 'VIP', 'BMA', 'EOCC', 'SID', 'HNP', 'PDP', 'GGAL',
         'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI', 'PAM',
-        'OEC']
+        'OEC', 'NORD', 'TAL', 'EDU', 'MELI', 'GLOB']
 
 def value_analysis(index):
     """
@@ -22,7 +22,7 @@ def value_analysis(index):
         return DataFrame()
 
     if type(index) == NASDAQ:
-        rule = [('EPS', '>', 0), ('MarketCap', '>', 1)]
+        rule = [('EPS', '>', 0), ('MarketCap', '>', 2)]
     else:
         rule = [('EPS', '>', 0), ('MarketCap', '>', 0)]
     stocks_value = index.filter_by_compare(rule)
@@ -95,9 +95,9 @@ def check_relative_growth(sym, index=NASDAQ()):
         print('Error: %s not in index.' %sym)
         return pd.Series()
     stat = index.components.loc[sym]
-    return stat.loc[['RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'RelativeGrowthLast2Years', 'RelativeGrowthLast3Years', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth']]
+    return stat.loc[['RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'RelativeGrowthLast2Years', 'RelativeGrowthLast3Years', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth']]
 
-def grow_and_value(index, ref_index=NASDAQ(), dropna=True):
+def grow_and_value(index, ref_index=NASDAQ(), dropna=True, saveto=None):
     """
     Filter out fast growing stocks with value analysis. This strategy picks
     1. Stocks that have solid fundamentals and outperform their respective industries or benchmarks.
@@ -114,14 +114,17 @@ def grow_and_value(index, ref_index=NASDAQ(), dropna=True):
         ref_index = index # value analysis of itself
 
     # fast growing stocks that still outperform the index recently
-    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1), ('RelativeGrowthLastMonth','>', 1), ('RelativeGrowthLastWeek','>=', 0.9), ('WeeklyRelativeGrowth', '>', 1)]
+    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1.0), ('RelativeGrowthLastMonth','>', 0.99), ('RelativeGrowthLastWeek','>=', 0.95), ('WeeklyRelativeGrowth', '>', 1.0)]
     index_grow = filter_by_compare(index, rules)
     ref_value = value_analysis(ref_index)
     index_value_grow = ref_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
     if dropna:
-        return index_value_grow.dropna()
-    else:
-        return index_value_grow
+        index_value_grow.dropna(inplace=True)
+
+    if saveto != None and len(index_value_grow) > 0:
+        index_value_grow.to_csv(saveto)
+
+    return index_value_grow
 
 def turnover_and_value(index):
     """
