@@ -108,14 +108,14 @@ def grow_and_value(index, ref_index=NASDAQ(), dropna=True, saveto=None):
     ref_index: reference index for value analysis, can be the same as index
     """
     if not issubclass(type(index), Index) or not issubclass(type(ref_index), Index):
-        print('Error: only Index type is supported.')
+        print('Error: grow_and_value: only Index type is supported.')
         return DataFrame()
     if ref_index.components.empty:
         ref_index = index # value analysis of itself
 
     # fast growing stocks that still outperform the index recently
     rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1.0), ('RelativeGrowthLastMonth','>', 0.99), ('RelativeGrowthLastWeek','>=', 0.95), ('WeeklyRelativeGrowth', '>', 1.0)]
-    index_grow = filter_by_compare(index, rules)
+    index_grow = index.filter_by_compare(rules)
     ref_value = value_analysis(ref_index)
     index_value_grow = ref_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
     if dropna:

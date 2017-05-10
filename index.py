@@ -295,10 +295,12 @@ class Index(object):
         stats = self.components.replace(np.nan, 0) # np.nan is not comparable
         for rule in rules:
             if len(rule) != 3:
+                print('Error: invalid rule ' + str(rule))
                 continue # not 3-tuple
             if len(stats) <= 0:
                 break
             if (type(rule[0]) != str) or (rule[0] not in stats.columns):
+                print('Error: invalid keyword ' + rule[0])
                 continue
             if (type(rule[2]) == str) and (rule[2] in stats.columns):
                 cut = stats[rule[2]]
