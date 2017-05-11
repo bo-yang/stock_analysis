@@ -11,7 +11,7 @@ rank_tags_hybrid2 = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'R
 
 blacklist = ['WINS', 'ENIC', 'LEXEB', 'LAUR', 'BGCA', 'AEK', 'MBT', 'VIP', 'BMA', 'EOCC', 'SID', 'HNP', 'PDP', 'GGAL',
         'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI', 'PAM',
-        'OEC', 'NORD', 'TAL', 'EDU', 'MELI', 'GLOB']
+        'OEC', 'NORD', 'TAL', 'EDU', 'MELI', 'GLOB', 'SINA']
 
 def value_analysis(index):
     """
@@ -133,10 +133,11 @@ def turnover_and_value(index):
     if not issubclass(type(index), Index):
         print('Error: only Index type is supported.')
         return DataFrame()
-    rules = [('LastQuarterDivergeIndex', '>', 0), ('LastQuarterDivergeIndex', '>=', ('HalfYearDivergeIndex', '*=', 0.6)), ('LastQuarterDivergeIndex', '>=', ('1YearDivergeIndex', '*=', 0.4))]
-    index_grow = filter_by_compare(index, rules)
+    #rules = [('LastQuarterDivergeIndex', '>', 0), ('LastQuarterDivergeIndex', '>=', ('HalfYearDivergeIndex', '*=', 0.6)), ('LastQuarterDivergeIndex', '>=', ('1YearDivergeIndex', '*=', 0.4))]
+    rules = [('WeeklyRelativeGrowth', '>', 1.0), ('MonthlyRelativeGrowth', '<=', 0.98)]
+    index_grow = index.filter_by_compare(rules)
     index_value = value_analysis(index)
-    stocks = index_value.loc[index_grow.index][['Total', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].dropna()
+    stocks = index_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].dropna()
     return stocks
 
 def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
