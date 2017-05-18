@@ -104,9 +104,10 @@ class Symbol:
                     quotes = DataFrame()
                     quotes = quotes.from_csv(self.files['quotes']) # quotes manually downloaded
                     # remove possible strings and convert to numbers
-                    m = quotes != 'null'
-                    quotes = quotes.where(m, np.nan).dropna(how='any')
-                    self.quotes = quotes.astype(float)
+                    if quotes[self._adj_close()].dtypes != np.dtype('float64'):
+                        m = quotes != 'null'
+                        quotes = quotes.where(m, np.nan).dropna(how='any').astype(float)
+                    self.quotes = quotes
                 else:
                     print('!!!Error: %s: failed to download historical quotes!!!' %sym)
                     return None
