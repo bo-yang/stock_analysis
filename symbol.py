@@ -69,9 +69,17 @@ class Symbol:
         else:
             return parse_start_end_date(start, end)
 
-    def get_quotes(self, start=None, end=None, sym=None):
+    def _adj_close(self):
+        if 'Adj Close' in self.quotes.columns:
+            return 'Adj Close'
+        elif 'Close' in self.quotes.columns:
+            return 'Close'
+        else:
+            return 'NA'
+
+    def get_quotes(self, start=None, end=None):
         """
-        Download history quotes from Yahoo Finance.
+        Download history quotes from Yahoo or Google Finance.
         Return Pandas DataFrame in the format of
                              Open       High    Low      Close    Volume  Adj Close
             Date                                                                   
@@ -82,13 +90,26 @@ class Symbol:
             2004-06-29  16.000000  16.700001  15.83  16.400000   2112000       4.10
         """
         [start_date, end_date] = self._handle_start_end_dates(start, end)
-        if sym == None:
-            sym = self.sym
+        sym = self.sym
         try:
-            self.quotes = web.DataReader(sym, "yahoo", start_date, end_date)
+            self.quotes = web.DataReader(sym, 'yahoo', start_date, end_date)
         except:
-            print('Error: failed to get quotes for '+sym+' from Yahoo Finance.')
-            return None
+            print('Error: %s: failed to download historical quotes from Yahoo Finance, try Google Finance...' %sym)
+            try:
+                self.quotes = web.DataReader(sym, 'google', start_date, end_date)
+            except:
+                print('Error: %s: failed to download historical quotes from Google Finance.' %sym)
+                if os.path.isfile(self.files['quotes']):
+                    print('%s: loading quotes from %s' %(sym, self.files['quotes']))
+                    quotes = DataFrame()
+                    quotes = quotes.from_csv(self.files['quotes']) # quotes manually downloaded
+                    # remove possible strings and convert to numbers
+                    m = quotes != 'null'
+                    quotes = quotes.where(m, np.nan).dropna(how='any')
+                    self.quotes = quotes.astype(float)
+                else:
+                    print('!!!Error: %s: failed to download historical quotes!!!' %sym)
+                    return None
         self.start_date = to_date(self.quotes.first_valid_index()) # update start date
         return self.quotes
 
@@ -251,7 +272,7 @@ class Symbol:
         if self.quotes.empty:
             return 0
         [start_date, end_date] = self._handle_start_end_dates(start, end)
-        adj_close = self.quotes.loc[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close']
+        adj_close = self.quotes.loc[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'), self._adj_close()]
         if self.quotes.empty or len(adj_close) < 1:
             return -99999999
         no_dividend = ('DividendYield' not in self.stats.columns) or np.isnan(self.stats['DividendYield'][self.sym])
@@ -322,14 +343,14 @@ class Symbol:
         [quart_ret_avg, quart_ret_median] = self.return_periodic(periods=13, freq='90D') # quarterly returns in the past 3 years
         [monthly_ret_avg, monthly_ret_median] = self.return_periodic(periods=25, freq='30D') #  monthly returns in the past 2 years
 
-        adj_close = self.quotes.loc[one_year_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close'].dropna()
+        adj_close = self.quotes.loc[one_year_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'), self._adj_close()].dropna()
         if not adj_close.empty and len(adj_close) > 0:
             current = adj_close[-1]
             last_year_growth = current - adj_close[0]
             # Current price in 52-week range should between [0, 1] - larger number means more expensive.
             pos_in_range = (current - adj_close.min()) / (adj_close.max() - adj_close.min())
 
-            adj_close = self.quotes.loc[three_month_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'),'Adj Close'].dropna()
+            adj_close = self.quotes.loc[three_month_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'), self._adj_close()].dropna()
             if not adj_close.empty and len(adj_close) > 0:
                 last_quarter_growth = adj_close[-1] - adj_close[0]
             else:
@@ -353,7 +374,7 @@ class Symbol:
         Return - pandas Series.
         """
         [start_date, end_date] = self._handle_start_end_dates(start, end)
-        stock = self.quotes["Adj Close"]
+        stock = self.quotes[self._adj_close()]
         move_avg = pd.Series(moving_average(stock, n, type='simple'), index=stock.index)
         return move_avg[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
 
@@ -369,7 +390,7 @@ class Symbol:
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         # EMA is start date sensitive
         tmp_start = start_date - BDay(n) # The first n days are used for init, so go back for n business days
-        stock = self.quotes['Adj Close'][tmp_start.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+        stock = self.quotes[self._adj_close()][tmp_start.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
         avg = pd.Series(moving_average(stock, n, type='exponential'), index=stock.index)
         return avg[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
 
@@ -417,12 +438,12 @@ class Symbol:
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         # use the latest available starting date
         start_date = max(to_date(self.quotes.first_valid_index()), to_date(index.quotes.first_valid_index()), start_date)
-        stock_quote = self.quotes['Adj Close'][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
-        index_quote = index.quotes['Adj Close'][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
+        stock_quote = self.quotes[self._adj_close()][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
+        index_quote = index.quotes[self._adj_close()][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
         if stock_quote.empty or index_quote.empty:
             return np.nan
-        stock_growth = stock_quote[-1] / stock_quote[0]
-        index_growth = index_quote[-1] / index_quote[0]
+        stock_growth = str2num(stock_quote[-1]) / str2num(stock_quote[0])
+        index_growth = str2num(index_quote[-1]) / str2num(index_quote[0])
         return stock_growth / index_growth
 
     def _relative_average_periodic(self, index, start_date, end_date, periods, freq, cb):
@@ -449,7 +470,7 @@ class Symbol:
         index: a Symbol class of index, e.g. S&P 500.
         """
         if index == None:
-            index = Symbol('^GSPC', name='SP500') # S&P500
+            index = Symbol('^GSPC', name='SP500', loaddata=False) # S&P500
         if self.quotes.empty:
             self.get_quotes()
         if index.quotes.empty:
@@ -640,7 +661,7 @@ class Symbol:
         labels = ['Symbol', 'EPSGrowth', 'Forward P/E', 'EarningsYield', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
         eps_growth = (self.stats['EPSEstimateCurrentYear'][self.sym] - self.stats['EPS'][self.sym]) / self.stats['EPS'][self.sym] * 100 # percent
         # Forward P/E = (current price / EPS estimate next year)
-        forward_pe = self.quotes['Adj Close'][-1] / self.stats['EPSEstimateCurrentYear'][self.sym]
+        forward_pe = self.quotes[self._adj_close()][-1] / self.stats['EPSEstimateCurrentYear'][self.sym]
 
         # Earnings Yield = (EPS last year) / (Share Price)
         # Greenblatt's updated version:
@@ -652,7 +673,7 @@ class Symbol:
             ent_value = self.stats['MarketCap'][0]*1000 + total_debt # TODO: minus cash
             earnings_yield = self.stats['EBITDA'][0] / ent_value
         if earnings_yield == 0: # try a different definition
-            earnings_yield = self.stats['EPS'][self.sym] / self.quotes['Adj Close'][-1]
+            earnings_yield = self.stats['EPS'][self.sym] / self.quotes[self._adj_close()][-1]
 
         # Return on capital:
         #   ROIC = (NetOperatingProfit - AdjustedTaxes) / InvestedCapital
@@ -776,7 +797,7 @@ class Symbol:
         if self.quotes.empty:
             return pd.Series()
         [start_date, end_date] = self._handle_start_end_dates(start, end)
-        stock = self.quotes["Adj Close"] # calc momentum for all hist data
+        stock = self.quotes[self._adj_close()] # calc momentum for all hist data
         calc = lambda x: x[-1] - x[0]
         m = stock.rolling(window = n, center = False).apply(calc).dropna()
         return m[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
@@ -792,7 +813,7 @@ class Symbol:
         if self.quotes.empty:
             return pd.Series()
         [start_date, end_date] = self._handle_start_end_dates(start, end)
-        stock = self.quotes["Adj Close"]
+        stock = self.quotes[self._adj_close()]
         calc = lambda x: (x[-1]/x[0] - 1) * 100
         rates = stock.rolling(window = n, center = False).apply(calc).dropna()
         return rates[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
@@ -852,7 +873,7 @@ class Symbol:
         # RSI is start date sensitive
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         tmp_start = start_date - BDay(n) # The first n days are used for init, so go back for n business days
-        prices = self.quotes['Adj Close'][tmp_start.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+        prices = self.quotes[self._adj_close()][tmp_start.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
         m = np.diff(prices)
 
         # initialization
@@ -898,11 +919,11 @@ class Symbol:
         if self.quotes.empty:
             return [pd.Series(), pd.Series()]
 
-        close = self.quotes['Adj Close']
+        close = self.quotes[self._adj_close()]
         if len(close) <= nK:
             return [pd.Series(), pd.Series()]
 
-        ratio = self.quotes['Adj Close'] / self.quotes['Close']
+        ratio = self.quotes[self._adj_close()] / self.quotes['Close']
         high = self.quotes['High'] * ratio # adjusted high
         low = self.quotes['Low'] * ratio   # adjusted low
 
@@ -944,7 +965,7 @@ class Symbol:
         # plot price, volume and EMA
         ema10 = self.ema(n=10, start=start_date, end=end_date)
         ema30 = self.ema(n=30, start=start_date, end=end_date)
-        price = self.quotes['Adj Close'][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+        price = self.quotes[self._adj_close()][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
 
         ax_ema = plt.subplot(nrows, 1, (1,2))
         ax_ema.fill_between(np.asarray(price.index), price.min(), np.asarray(price), facecolor='lightskyblue', linewidth=0.0)

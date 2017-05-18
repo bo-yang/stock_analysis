@@ -65,12 +65,21 @@ class Index(object):
         print('Chunk %d - %d' %(iStart, iEnd)) # FIXME: TEST ONLY
         chunk_stats = self.components[iStart:iEnd]
         sym_list = self.components[iStart:iEnd].index.tolist()
-        pquotes = web.DataReader(sym_list, "yahoo", start_date, end_date)
+
+        try:
+            pquotes = web.DataReader(sym_list, 'yahoo', start_date, end_date)
+        except:
+            print('Chunk(%d - %d): failed to download history quotes from Yahoo Finance, try Google Finance now...' %(iStart, iEnd))
+            try:
+                pquotes = web.DataReader(sym_list, 'google', start_date, end_date)
+            except:
+                sys.exit('Error: chunk(%d - %d): failed to download history quotes!!!' %(iStart, iEnd))
+
         # items - symbols; major_axis - time; minor_axis - Open to Adj Close
         pquotes = pquotes.transpose(2,1,0)
         if len(pquotes.items) == 0:
-            print('Error: failed to get history quotes for chunk  %d - %d.' %(iStart, iEnd))
-            return DataFrame()
+            sys.exit('Error: invalid history quotes for chunk %d - %d.' %(iStart, iEnd))
+
         print('Total # of symbols in this chunk: %d' %len(pquotes.items)) # FIXME: TEST ONLY
         add_stats = self._get_compo_stats(pquotes)
         chunk_stats = chunk_stats.join(add_stats)
@@ -111,12 +120,12 @@ class Index(object):
             self.save_data()
         return self.components
 
-    def get_financials(self):
+    def get_financials(self, update_list=True):
         """
         Download financial data for all stocks.
         """
-        if self.components.empty:
-            self.get_compo_list()
+        if self.components.empty or update_list:
+            self.get_compo_list(update_list=True)
         browser=webdriver.Chrome()
         for sym in self.components.index:
             print('Downloading financial data for ' + sym) # FIXME: TEST ONLY
@@ -401,7 +410,6 @@ class SP400(Index):
     """
     def __init__(self, datapath='./data', loaddata=False):
         super(self.__class__, self).__init__(sym='^GSPC', name='SP400', datapath=datapath, loaddata=loaddata)
-        #self.sym.get_quotes(sym='^GSPC') # use SP500 as a reference
 
     def get_compo_list(self):
         """
