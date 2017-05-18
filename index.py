@@ -73,12 +73,14 @@ class Index(object):
             try:
                 pquotes = web.DataReader(sym_list, 'google', start_date, end_date)
             except:
-                sys.exit('Error: chunk(%d - %d): failed to download history quotes!!!' %(iStart, iEnd))
+                print('!!!Error: chunk(%d - %d): failed to download history quotes!!!' %(iStart, iEnd))
+                return DataFrame()
 
         # items - symbols; major_axis - time; minor_axis - Open to Adj Close
         pquotes = pquotes.transpose(2,1,0)
         if len(pquotes.items) == 0:
-            sys.exit('Error: invalid history quotes for chunk %d - %d.' %(iStart, iEnd))
+            print('!!!Error: invalid history quotes for chunk %d - %d.' %(iStart, iEnd))
+            return DataFrame()
 
         print('Total # of symbols in this chunk: %d' %len(pquotes.items)) # FIXME: TEST ONLY
         add_stats = self._get_compo_stats(pquotes)

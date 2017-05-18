@@ -932,7 +932,12 @@ class Symbol:
             s = close[i-nK : i]
             h = high[i-nK : i]
             l = low[i-nK : i]
-            sto[i-1] = (s[-1]-min(l))/(max(h)-min(l)) * 100
+            if max(h) != min(l):
+                denominator = max(h) - min(l)
+            else:
+                # avoid devide-by-zero error
+                denominator = random.random() / 1000
+            sto[i-1] = (s[-1]-min(l))/denominator * 100
         sto[:nK-1] = sto[nK-1]
         K = pd.Series(sto, index=close.index)
         D = pd.Series(moving_average(K, n=nD, type='simple'), index=K.index)

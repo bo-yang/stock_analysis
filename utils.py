@@ -6,6 +6,7 @@ import numpy as np
 import datetime as dt
 import time
 import operator
+import random
 
 from pandas import DataFrame
 from pandas.tseries.offsets import BDay # business days
