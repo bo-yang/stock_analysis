@@ -101,13 +101,11 @@ class Symbol:
                 print('Error: %s: failed to download historical quotes from Google Finance.' %sym)
                 if os.path.isfile(self.files['quotes']):
                     print('%s: loading quotes from %s' %(sym, self.files['quotes']))
-                    quotes = DataFrame()
-                    quotes = quotes.from_csv(self.files['quotes']) # quotes manually downloaded
+                    self.quotes = self.quotes.from_csv(self.files['quotes']) # quotes manually downloaded
                     # remove possible strings and convert to numbers
-                    if quotes[self._adj_close()].dtypes != np.dtype('float64'):
-                        m = quotes != 'null'
-                        quotes = quotes.where(m, np.nan).dropna(how='any').astype(float)
-                    self.quotes = quotes
+                    if self.quotes[self._adj_close()].dtypes != np.dtype('float64'):
+                        m = self.quotes != 'null'
+                        self.quotes = self.quotes.where(m, np.nan).dropna(how='any').astype(float)
                 else:
                     print('!!!Error: %s: failed to download historical quotes!!!' %sym)
                     return None
