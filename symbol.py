@@ -283,6 +283,8 @@ class Symbol:
             # This is not accurate and need to be enhanced.
             dividend = self.stats['DividendYield'][self.sym] * adj_close.mean() / 100 # yearly dividend
             dividend = dividend / 365 * (end_date-start_date).days # dividend in the range
+        if adj_close[0] == 0:
+            adj_close[0] = 0.00001
         roi = (adj_close[-1] - adj_close[0] + dividend) / adj_close[0]
         return roi
 
