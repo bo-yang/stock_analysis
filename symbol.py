@@ -524,7 +524,7 @@ class Symbol:
         end_date = dt.date.today()
         start_date = end_date - dt.timedelta(days=90)
         one_month_ago = end_date - dt.timedelta(days=30)
-        labels = ['Symbol', 'ROC', 'ROC Trend 7D', 'ROC Trend 14D', 'RSI', 'MACD Diff', 'FSTO', 'SSTO', 'AvgFSTOLastMonth', 'AvgFSTOLastQuarter']
+        labels = ['Symbol', 'ROC', 'ROC Trend 7D', 'ROC Trend 14D', 'RSI', 'MACD Diff', 'FSTO', 'SSTO', 'AvgFSTOLastMonth', 'AvgFSTOLastQuarter', 'Volume Change']
 
         roc = self.roc(start=start_date, end=end_date)
         if roc.empty or len(roc) < 1:
@@ -564,7 +564,18 @@ class Symbol:
         roc_trend_7d = find_trend(roc[seven_days_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')])
         roc_trend_14d = find_trend(roc[forteen_days_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')])
 
-        stats = [[self.sym, roc_stat, roc_trend_7d, roc_trend_14d, rsi_stat, macd_stat, fsto_stat, ssto_stat, avg_fsto_past_month, avg_fsto_past_quarter]]
+        # Volume changes in the past two weeks
+        this_week_start = end_date - dt.timedelta(days=7)
+        last_week_end = end_date - dt.timedelta(days=8)
+        last_week_start = end_date - dt.timedelta(days=15)
+        volume_this_week = self.quotes['Volume'].loc[this_week_start.strftime('%Y-%m-%d'):].mean()
+        volume_last_week = self.quotes['Volume'].loc[last_week_start.strftime('%Y-%m-%d') : last_week_end.strftime('%Y-%m-%d')].mean()
+        if volume_last_week != 0:
+            volume_change = volume_this_week / volume_last_week
+        else:
+            volume_change = 999999
+
+        stats = [[self.sym, roc_stat, roc_trend_7d, roc_trend_14d, rsi_stat, macd_stat, fsto_stat, ssto_stat, avg_fsto_past_month, avg_fsto_past_quarter, volume_change]]
         stats_df = DataFrame(stats, columns=labels)
         stats_df = stats_df.drop_duplicates()
         stats_df = stats_df.set_index('Symbol')
