@@ -180,6 +180,23 @@ def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
         table.to_csv(saveto)
     return table
 
+def new_high(index):
+    """
+    Filter out stocks at 52-week high. Parameters are:
+    - Current Price/52-week High greater than or equal to 80%.
+    - (12-Week Price Change)% greater than 0.
+    - (4-Week Price Change)% greater than 0
+    - Analysts ranking "Strong Buy"
+    - Price/Sales ratio less than or equal to industry median.
+    - P/E less than or equal to industry median.
+    - Projected one-year EPS growth F(1)/F(0) greater than or equal to industry median.
+    - Current average 20-day volume greater than previous week's average 20-day volume.
+      This helps find stocks where the volume has increased in the recent week vs. the previous week. If the price is climbing on increased volune, that shows increased demand or buying coming in. And the more buying demand there's for stock, the more it should climb.
+    - Above parameters are applied to stocks with a price greater than or equal to $5 and an average 20-day volume of greater than or equal to 100,000 shares.
+    - (12-Week Price Change)% + (4-Week Price Change)% == top #5
+    """
+    return DataFrame()
+
 def ranking_by_range(symbols, tags):
     """
     Make a table and compare stocks based on key factors.
