@@ -524,7 +524,7 @@ class Symbol:
         end_date = dt.date.today()
         start_date = end_date - dt.timedelta(days=90)
         one_month_ago = end_date - dt.timedelta(days=30)
-        labels = ['Symbol', 'ROC', 'ROC Trend 7D', 'ROC Trend 14D', 'RSI', 'MACD Diff', 'FSTO', 'SSTO', 'AvgFSTOLastMonth', 'AvgFSTOLastQuarter', 'Volume Change']
+        labels = ['Symbol', 'ROC', 'ROC Trend 7D', 'ROC Trend 14D', 'RSI', 'MACD Diff', 'FSTO', 'SSTO', 'AvgFSTOLastMonth', 'AvgFSTOLastQuarter', 'VolumeChange']
 
         roc = self.roc(start=start_date, end=end_date)
         if roc.empty or len(roc) < 1:
