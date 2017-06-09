@@ -512,3 +512,21 @@ class NASDAQ(Index):
 
         return self.components
 
+class Russell2000(Index):
+    """
+    Russell 2000
+    """
+    def __init__(self, datapath='./data', loaddata=False):
+        super(self.__class__, self).__init__(sym='^GSPC', name='Russell2000', datapath=datapath, loaddata=loaddata)
+
+    def get_compo_list(self, update_list=False):
+        if not os.path.isdir(self.datapath):
+            os.makedirs(self.datapath)
+        companylist = self.datapath + '/companylist.csv'
+
+        # TODO: download/generate Russell 2000 tickers
+        if os.path.isfile(companylist):
+            self.components = self.components.from_csv(companylist)
+
+        return self.components
+

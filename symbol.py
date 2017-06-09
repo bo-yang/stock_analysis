@@ -935,7 +935,10 @@ class Symbol:
         if len(close) <= nK:
             return [pd.Series(), pd.Series()]
 
-        ratio = self.quotes[self._adj_close()] / self.quotes['Close']
+        try:
+            ratio = self.quotes[self._adj_close()] / self.quotes['Close']
+        except ZeroDivisionError:
+            ratio = 1
         high = self.quotes['High'] * ratio # adjusted high
         low = self.quotes['Low'] * ratio   # adjusted low
 
