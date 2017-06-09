@@ -228,8 +228,6 @@ def ranking_by_sort(symbols, tags):
     """
     Ranking stocks by sorting. Total scores - the lower the better.
     """
-    #roc = symbols['EarningsYield']
-    #ey = symbols['ReturnOnCapital']
     table = DataFrame()
     rank = pd.Series()
     for t in tags.keys():
@@ -241,7 +239,8 @@ def ranking_by_sort(symbols, tags):
         rank_col = pd.Series(np.arange(len(col)), name=t+'Score', index=col.index)
         rank_col = rank_col.sort_index()
         if table.empty:
-            table = table.append(col.sort_index()).transpose()
+            #table = table.append(col.sort_index()).transpose()
+            table = table.join(col.sort_index(), how='outer')
             table = table.join(rank_col)
             rank = rank_col
         else:
