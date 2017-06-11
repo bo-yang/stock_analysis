@@ -117,6 +117,9 @@ def grow_and_value(index, ref_index=NASDAQ(), dropna=True, saveto=None):
     rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1.0), ('RelativeGrowthLastMonth','>', 0.98), ('RelativeGrowthLastWeek','>=', 0.95), ('MonthlyRelativeGrowth', '>', 1.0), ('WeeklyRelativeGrowth', '>', 1.0)]
     index_grow = index.filter_by_compare(rules)
     ref_value = value_analysis(ref_index)
+    if len(ref_value) == 0:
+        return DataFrame()
+
     index_value_grow = ref_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
     if dropna:
         index_value_grow.dropna(inplace=True)
