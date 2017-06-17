@@ -21,7 +21,7 @@ def value_analysis(index):
         print('Error: only Index type is supported.')
         return DataFrame()
 
-    if type(index) == NASDAQ:
+    if type(index) == NASDAQ or type(index) == Russell2000:
         rule = [('EPS', '>', 0), ('MarketCap', '>', 1)]
     else:
         rule = [('EPS', '>', 0), ('MarketCap', '>', 0)]
@@ -53,7 +53,7 @@ def value_analysis(index):
 
     # Ranking stocks
     stock_rank = ranking(stocks_value, tags=rank_tags_value, rank='sort')
-    stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange', 'Sector', 'Industry']])
+    stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['LastWeekReturn', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange', 'Sector', 'Industry']])
     saveto = 'data/%s_value.csv' %index.name
     stock_rank.to_csv(saveto)
     #print(stock_rank.to_string())
@@ -120,7 +120,7 @@ def grow_and_value(index, ref_index=NASDAQ(), dropna=True, saveto=None):
     if len(ref_value) == 0:
         return DataFrame()
 
-    index_value_grow = ref_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
+    index_value_grow = ref_value.loc[index_grow.index][['Total', 'LastWeekReturn', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
     if dropna:
         index_value_grow.dropna(inplace=True)
 
