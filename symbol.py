@@ -776,13 +776,14 @@ class Symbol:
         if self.quotes.empty:
             print("%s: ERROR - cannot download quotes, no statistics available." %self.sym)
             return DataFrame()
-        elif self.quotes is None or len(self.quotes) < 7:
+        elif self.quotes is None:
             print("%s: ERROR - invalid quotes." %self.sym)
             return DataFrame()
 
         # make sure quotes are numbers
-        m = (self.quotes != 'null')
-        self.quotes = self.quotes.where(m, np.nan).dropna(how='any').astype(float)
+        if self.quotes[self._adj_close()].dtypes != np.dtype('float64'):
+            m = (self.quotes != 'null')
+            self.quotes = self.quotes.where(m, np.nan).dropna(how='any').astype(float)
 
         # Yahoo Finance statistics - it must be downloaded before other stats
         self.stats = get_symbol_yahoo_stats([self.sym], exclude_name=exclude_name)
