@@ -87,7 +87,7 @@ class Index(object):
         chunk_stats = chunk_stats.join(add_stats)
         return chunk_stats
 
-    def get_stats(self, save=True, chunk=500):
+    def get_stats(self, save=True, chunk=100):
         """
         Calculate all components' statistics in batch.
         """

@@ -102,13 +102,13 @@ class Symbol:
                 if os.path.isfile(self.files['quotes']):
                     print('%s: loading quotes from %s' %(sym, self.files['quotes']))
                     self.quotes = self.quotes.from_csv(self.files['quotes']) # quotes manually downloaded
-                    # remove possible strings and convert to numbers
-                    if self.quotes[self._adj_close()].dtypes != np.dtype('float64'):
-                        m = self.quotes != 'null'
-                        self.quotes = self.quotes.where(m, np.nan).dropna(how='any').astype(float)
                 else:
                     print('!!!Error: %s: failed to download historical quotes!!!' %sym)
                     return None
+        # remove possible strings and convert to numbers
+        if self.quotes[self._adj_close()].dtypes != np.dtype('float64'):
+            m = self.quotes != 'null'
+            self.quotes = self.quotes.where(m, np.nan).dropna(how='any').astype(float)
         self.start_date = to_date(self.quotes.first_valid_index()) # update start date
         return self.quotes
 
@@ -283,9 +283,17 @@ class Symbol:
             # This is not accurate and need to be enhanced.
             dividend = self.stats['DividendYield'][self.sym] * adj_close.mean() / 100 # yearly dividend
             dividend = dividend / 365 * (end_date-start_date).days # dividend in the range
-        if adj_close[0] == 0:
-            adj_close[0] = 0.00001
-        roi = (adj_close[-1] - adj_close[0] + dividend) / adj_close[0]
+        start_price = adj_close[0]
+        end_price = adj_close[-1]
+        if type(start_price) == str:
+            start_price = str2num(start_price)
+        if type(end_price) == str:
+            end_price = str2num(end_price)
+        if start_price == 0 or np.isnan(start_price):
+            start_price = 0.00001
+        if end_price == 0 or np.isnan(end_price):
+            end_price == 0.00001
+        roi = (end_price - start_price + dividend) / start_price
         return roi
 
     def return_periodic(self, periods=6, freq='365D'):
@@ -768,6 +776,13 @@ class Symbol:
         if self.quotes.empty:
             print("%s: ERROR - cannot download quotes, no statistics available." %self.sym)
             return DataFrame()
+        elif self.quotes is None or len(self.quotes) < 7:
+            print("%s: ERROR - invalid quotes." %self.sym)
+            return DataFrame()
+
+        # make sure quotes are numbers
+        m = (self.quotes != 'null')
+        self.quotes = self.quotes.where(m, np.nan).dropna(how='any').astype(float)
 
         # Yahoo Finance statistics - it must be downloaded before other stats
         self.stats = get_symbol_yahoo_stats([self.sym], exclude_name=exclude_name)
