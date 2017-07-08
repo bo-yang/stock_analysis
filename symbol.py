@@ -91,20 +91,26 @@ class Symbol:
         """
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         sym = self.sym
-        try:
-            self.quotes = web.DataReader(sym, 'yahoo', start_date, end_date)
-        except:
-            print('Error: %s: failed to download historical quotes from Yahoo Finance, try Google Finance...' %sym)
+        for n_tries in range(0,5): # try at most 5 times
             try:
-                self.quotes = web.DataReader(sym, 'google', start_date, end_date)
+                self.quotes = web.DataReader(sym, 'yahoo', start_date, end_date)
+                break
             except:
-                print('Error: %s: failed to download historical quotes from Google Finance.' %sym)
-                if os.path.isfile(self.files['quotes']):
-                    print('%s: loading quotes from %s' %(sym, self.files['quotes']))
-                    self.quotes = self.quotes.from_csv(self.files['quotes']) # quotes manually downloaded
-                else:
-                    print('!!!Error: %s: failed to download historical quotes!!!' %sym)
-                    return None
+                print('Error: %s: failed to download historical quotes from Yahoo Finance, try Google Finance...' %sym)
+                try:
+                    self.quotes = web.DataReader(sym, 'google', start_date, end_date)
+                    break
+                except:
+                    print('Error: %s: failed to download historical quotes from Google Finance.' %sym)
+
+        if self.quotes.empty:
+            if os.path.isfile(self.files['quotes']):
+                print('%s: loading quotes from %s' %(sym, self.files['quotes']))
+                self.quotes = self.quotes.from_csv(self.files['quotes']) # quotes manually downloaded
+            else:
+                print('!!!Error: %s: failed to download historical quotes!!!' %sym)
+                return None
+
         # remove possible strings and convert to numbers
         if self.quotes[self._adj_close()].dtypes != np.dtype('float64'):
             m = self.quotes != 'null'
