@@ -213,8 +213,8 @@ class Index(object):
             print('Error: a list of tickers is expected.')
             return
         if columns == None:
-            columns = self.components.columns[4:].tolist()
-            #return self.components.loc[stocks].transpose()
+            not_needed = ['Name', 'ADR TSO', 'Sector', 'Industry', 'Summary Quote']
+            columns = self.components.columns.drop(not_needed, errors='ignore').tolist()
         if type(columns) != list:
             print('Error: a list of attribute is expected.')
             return
