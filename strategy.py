@@ -97,7 +97,7 @@ def check_relative_growth(sym, index=NASDAQ()):
     stat = index.components.loc[sym]
     return stat.loc[['RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'RelativeGrowthLast2Years', 'RelativeGrowthLast3Years', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth']]
 
-def grow_and_value(index, ref_index=NASDAQ(), dropna=True, saveto=None):
+def grow_and_value(index, ref_index=NASDAQ(), slowdown=False, dropna=True, saveto=None):
     """
     Filter out fast growing stocks with value analysis. This strategy picks
     1. Stocks that have solid fundamentals and outperform their respective industries or benchmarks.
@@ -114,7 +114,10 @@ def grow_and_value(index, ref_index=NASDAQ(), dropna=True, saveto=None):
         ref_index = index # value analysis of itself
 
     # fast growing stocks that still outperform the index recently
-    rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1.0), ('RelativeGrowthLastMonth','>', 0.98), ('RelativeGrowthLastWeek','>=', 0.95), ('MonthlyRelativeGrowth', '>', 1.0), ('WeeklyRelativeGrowth', '>', 1.0)]
+    if not slowdown:
+        rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1.0), ('RelativeGrowthLastMonth','>', 0.98), ('RelativeGrowthLastWeek','>=', 0.95), ('MonthlyRelativeGrowth', '>', 1.0), ('WeeklyRelativeGrowth', '>', 1.0)]
+    else:
+        rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('QuarterlyRelativeGrowth', '>', 1), ('MonthlyRelativeGrowth', '>=', 0.98), ('WeeklyRelativeGrowth', '<', 1.0)]
     index_grow = index.filter_by_compare(rules)
     ref_value = value_analysis(ref_index)
     if len(ref_value) == 0:
