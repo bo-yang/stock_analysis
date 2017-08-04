@@ -251,8 +251,8 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
     tags = ['Symbol']
     if not exclude_name:
         tags += ['Name'] 
-    real_tags = ['MarketCap', 'Volume', 'AverageDailyVolume', 'BookValue', 'P/E', 'PEG', 'Price/Sales', 'Price/Book',
-            'EBITDA', 'EPS', 'EPSEstimateNextQuarter', 'EPSEstimateCurrentYear', 'EPSEstimateNextYear',
+    real_tags = ['MarketCap', 'Volume', 'AverageDailyVolume', 'BookValuePerShare', 'P/E', 'PEG', 'Price/Sales',
+            'Price/Book', 'EBITDA', 'EPS', 'EPSEstimateNextQuarter', 'EPSEstimateCurrentYear', 'EPSEstimateNextYear',
             'OneyrTargetPrice', 'PriceEPSEstimateCurrentYear', 'PriceEPSEstimateNextYear', 'ShortRatio',
             'Dividend/Share', 'DividendYield', 'DividendPayDate', 'ExDividendDate']
     tags += real_tags

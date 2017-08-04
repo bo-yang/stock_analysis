@@ -116,6 +116,7 @@ def grow_and_value(index, ref_index=NASDAQ(), slowdown=False, dropna=True, savet
     # fast growing stocks that still outperform the index recently
     if not slowdown:
         rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1.0), ('RelativeGrowthLastMonth','>', 0.98), ('RelativeGrowthLastWeek','>=', 0.95), ('MonthlyRelativeGrowth', '>', 1.0), ('WeeklyRelativeGrowth', '>', 1.0)]
+        #rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('MonthlyRelativeGrowth', '>', 1.0), ('WeeklyRelativeGrowth', '>=', 'MonthlyRelativeGrowth')]
     else:
         rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('QuarterlyRelativeGrowth', '>', 1), ('MonthlyRelativeGrowth', '>=', 0.98), ('WeeklyRelativeGrowth', '<', 1.0)]
     index_grow = index.filter_by_compare(rules)

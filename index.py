@@ -144,19 +144,34 @@ class Index(object):
         browser.close()
         return
 
+    def _get_sector_industry(self, secind, key):
+        """
+        Filter out all components in the same sector/industry.
+        secind: 'Sector' or 'Industry'
+        key: keyword, sector/industry name
+        """
+        if type(key) != str:
+            print('Error: _get_sector_industry: keyword must be string.')
+            return None
+        if self.components.empty:
+            self.get_stats()
+        m = self.components[secind] == key
+        symbols = self.components.where(m, np.nan)
+        return symbols.dropna(axis=0, how='all') # drop all NaN rows
+
     def get_sector(self, sector):
         """
         Filter out all components in the same sector.
         sector: str
         """
-        if type(sector) != str:
-            print('Error: sector must be string.')
-            return None
-        if self.components.empty:
-            self.get_stats()
-        m = self.components['Sector'] == sector
-        symbols = self.components.where(m, np.nan)
-        return symbols.dropna(axis=0, how='all') # drop all NaN rows
+        return self._get_sector_industry('Sector', sector)
+
+    def get_industry(self, industry):
+        """
+        Filter out all components in the same industry.
+        industry: str
+        """
+        return self._get_sector_industry('Industry', industry)
 
     def sector_top(self, percent=0.5, saveto=None):
         """
@@ -197,6 +212,43 @@ class Index(object):
             f = os.path.normpath(self.datapath + '/' + saveto)
             tops_df.to_csv(f)
         return tops_df
+
+    def _get_sector_industry_mean(self, secind, key):
+        """
+        Get mean value in the same sector/industry.
+        secind: 'Sector' or 'Industry'
+        key: keyword, e.g. 'P/E', 'Price/Book', 'Price/Sales'
+        """
+        if type(key) == str:
+            key = [key]
+        tags = [secind] + key
+        lines = []
+        uniques = set(self.components[secind].tolist())
+        for item in uniques:
+            stocks = self._get_sector_industry(secind, item)
+            if len(stocks) == 0:
+                continue
+            lines.append([item] + stocks[key].mean().tolist())
+        stats = DataFrame(lines, columns=tags)
+        stats = stats.drop_duplicates()
+        stats = stats.set_index(secind)
+        return stats
+
+    def get_sector_mean(self, key):
+        """
+        Get mean value in the same sector.
+        key: (list of) keyword, e.g. ['P/E', 'Price/Book', 'Price/Sales']
+        e.g. nasdaq.get_sector_mean(['P/E', 'Price/Book', 'Price/Sales'])
+        """
+        return self._get_sector_industry_mean('Sector', key)
+
+    def get_industry_mean(self, key):
+        """
+        Get mean value in the same industry.
+        key: (list of) keyword, e.g. ['P/E', 'Price/Book', 'Price/Sales']
+        e.g. nasdaq.get_industry_mean(['P/E', 'Price/Book', 'Price/Sales'])
+        """
+        return self._get_sector_industry_mean('Industry', key)
 
     def compare(self, stocks, columns=None):
         """
