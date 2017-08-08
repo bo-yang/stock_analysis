@@ -254,9 +254,69 @@ class Index(object):
         Get mean value in the same industry.
         key: (list of) keyword, e.g. ['P/E', 'Price/Book', 'Price/Sales']
         item: a specific sector/industry name
-        e.g. nasdaq.get_industry_mean(['P/E', 'Price/Book', 'Price/Sales'])
+
+        e.g.
+            nasdaq.get_industry_mean(['P/E', 'Price/Book', 'Price/Sales'])
+            value_keys = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+            nasdaq.get_industry_mean(value_keys, item='RETAIL: Building Materials')
         """
         return self._get_sector_industry_mean('Industry', key, item)
+
+    def _compare_to_sector_industry(self, stocks, secind, columns=[]):
+        """
+        Compare a list of stocks to their sectors/industries.
+
+        stocks: a list of stock tickers
+        secind: 'Sector' or 'Industry'
+        columns: a list of attributes to be compared
+        """
+        if type(stocks) != list:
+            print('Error: a list of tickers is expected.')
+            return
+        if len(columns) == 0:
+            columns = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+        tags = ['Items'] + columns
+        sidict = dict() # 'Sector/Industry' : [[]]
+        for s in stocks:
+            if s not in self.components.index:
+                print('Error: %s not found in %s' %(s.sym, self.name))
+                continue
+            stock = self.components.loc[s]
+            sec_ind = stock.loc[secind]
+            line = [s] + stock.loc[columns].tolist()
+            if sec_ind not in sidict.keys():
+                sidict[sec_ind] = [line] # list of lists
+            else:
+                sidict[sec_ind].append(line)
+
+        lines = []
+        for sec_ind in sidict:
+            lines.append([sec_ind] + self._get_sector_industry_mean(secind, columns, item=sec_ind).iloc[-1].tolist())
+            for l in sidict[sec_ind]:
+                lines.append(l)
+        stats = DataFrame(lines, columns=tags)
+        stats = stats.drop_duplicates()
+        stats = stats.set_index(tags[0])
+        print(stats.to_string())
+        return
+
+    def compare_to_sector(self, stocks, columns=[]):
+        """
+        Compare a list of stocks to their sectors.
+
+        stocks: a list of stock tickers
+        columns: a list of attributes to be compared
+        """
+        return self._compare_to_sector_industry(stocks, 'Sector', columns)
+
+    def compare_to_industry(self, stocks, columns=[]):
+        """
+        Compare a list of stocks to their industries.
+
+        stocks: a list of stock tickers
+        columns: a list of attributes to be compared
+        """
+        return self._compare_to_sector_industry(stocks, 'Industry', columns)
 
     def compare(self, stocks, columns=None):
         """
