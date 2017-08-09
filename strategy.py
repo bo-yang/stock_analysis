@@ -126,7 +126,7 @@ def grow_and_value(index, ref_index=NASDAQ(), slowdown=False, dropna=True, savet
 
     index_value_grow = ref_value.loc[index_grow.index][['Total', 'LastWeekReturn', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
     if dropna:
-        index_value_grow.dropna(inplace=True)
+        index_value_grow.dropna(inplace=True, how='all')
 
     if saveto != None and len(index_value_grow) > 0:
         index_value_grow.to_csv(saveto)
@@ -156,7 +156,7 @@ def turnover_and_value(index):
     rules = [('WeeklyRelativeGrowth', '>', 1.0), ('MonthlyRelativeGrowth', '<=', 0.98)]
     index_grow = index.filter_by_compare(rules)
     index_value = value_analysis(index)
-    stocks = index_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].dropna()
+    stocks = index_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].dropna(how='all')
     return stocks
 
 def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):

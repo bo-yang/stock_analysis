@@ -144,7 +144,7 @@ class Index(object):
         browser.close()
         return
 
-    def _get_sector_industry(self, secind, key):
+    def _get_tickers_of_sector_industry(self, secind, key):
         """
         Filter out all components in the same sector/industry.
         secind: 'Sector' or 'Industry'
@@ -159,59 +159,105 @@ class Index(object):
         symbols = self.components.where(m, np.nan)
         return symbols.dropna(axis=0, how='all') # drop all NaN rows
 
-    def get_sector(self, sector):
+    def get_tickers_of_sector(self, sector):
         """
         Filter out all components in the same sector.
         sector: sector name, string
         """
-        return self._get_sector_industry('Sector', sector)
+        return self._get_tickers_of_sector_industry('Sector', sector)
 
-    def get_industry(self, industry):
+    def get_tickers_of_industry(self, industry):
         """
         Filter out all components in the same industry.
         industry: industry name, string
         """
-        return self._get_sector_industry('Industry', industry)
+        return self._get_tickers_of_sector_industry('Industry', industry)
 
-    def sector_top(self, percent=0.5, saveto=None):
+    def _get_sector_industry_top(self, secind, siname='', columns=[], percent=0.2):
         """
-        Calculate the sector top performance of each column.
+        Get the top performers of each sector/industry.
 
-        percent: percentage of top, [0-1]
+        secind: 'Sector' or 'Industry'
+        siname: sector/industry name
+        columns: a list of attributes, e.g. ['P/E', 'Price/Book', 'Price/Sales']
+        percent: the top percentage, [0-1]. E.g. percent=0.2 means top 20%
+        """
+        if self.components.empty:
+            self.get_stats()
+
+        if len(columns) == 0:
+            columns = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'EarningsYield', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+
+        symbols = self._get_tickers_of_sector_industry(secind, siname)
+        if symbols.empty:
+            return DataFrame()
+
+        orig_symbols = symbols[columns]
+        symbols = symbols[columns]
+        # Columns with values the smaller the better
+        descend_cols = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'Debt/Assets Momentum', 'PEG', 'Forward P/E', 'Price/Book', 'PriceIn52weekRange']
+        asccols = list(set(columns) - set(descend_cols))
+        descols = list(set(columns) & set(descend_cols))
+
+        # pre-processing data
+        #
+        # suppress noises
+        symbols /= symbols.median()
+        m = (symbols <= symbols.median()*20)
+        symbols = symbols.where(m, np.nan).replace(np.nan, 1)
+        m = (symbols >= -np.abs(symbols.median()*20))
+        symbols = symbols.where(m, np.nan).replace(np.nan, 0)
+        # normalization
+        col_max = symbols.max()
+        col_min = symbols.min()
+        symbols = (symbols - col_min) / (col_max - col_min)
+
+        # calc scores for each symbol based on columns
+        scores = symbols[asccols].transpose().sum() + (1 - symbols[descols]).transpose().sum()
+        scores.name = 'Score'
+        symbols = orig_symbols.join(scores)
+
+        # find the top by score
+        top_nums = int(len(symbols) * percent) + 1
+        tops = symbols.sort_values('Score', ascending=False).iloc[:top_nums]
+        return tops
+
+    def get_industry_tops(self, industries=list(), stocks=list(), columns=list(), percent=0.2, saveto = None):
+        """
+        Get the top performers of each industry.
+
+        industries: a list of industry names
+        stocks: a list of tickers, which can be used to get their industries
+        columns: a list of attributes, e.g. ['P/E', 'Price/Book', 'Price/Sales']
+        percent: the top percentage, [0-1]. E.g. percent=0.2 means top 20%
         saveto: save to file
         """
         if self.components.empty:
             self.get_stats()
-        tops = list()
-        all_sectors = self.components['Sector'].drop_duplicates()
-        for sec in all_sectors:
-            symbols = self.get_sector(sec)
-            if symbols.empty:
-                continue
-            row = list()
-            for col in symbols.columns:
-                if col == 'Name' or col == 'Industry':
-                    column = symbols['1YearReturn'].dropna() # this is a trick
-                elif col == 'Sector':
-                    row.append(sec)
-                    continue
-                else:
-                    column = symbols[col].dropna()
-                if column.empty:
-                    row.append(np.nan)
-                    continue
-                idx = int(np.floor(len(column) * percent)) # sort ascendingly
-                if idx == len(column):
-                    idx = -1 # last element
-                row.append(column.sort_values(ascending=True)[idx])
-            tops.append(row) # each sector
 
-        tops_df = DataFrame(tops, columns=self.components.columns)
-        tops_df = tops_df.set_index('Sector')
-        if saveto != None and not tops_df.empty:
+        if type(industries) == str:
+            industries = [industries]
+        if len(industries) == 0:
+            if len(stocks) > 0:
+                inds = set()
+                for s in stocks:
+                    inds.add(self.components['Industry'].loc[s])
+                industries = list(inds)
+            else:
+                industries = self.components['Industry'].drop_duplicates()
+
+        tops = DataFrame()
+        for ind in industries:
+            # append sec/ind median as comparison
+            ind_median = self.get_industry_median(columns=columns, industry=ind)
+            ind_median = ind_median.join(pd.Series([np.nan], name='Score'))
+            tops = tops.append(ind_median)
+            tops = tops.append(self._get_sector_industry_top('Industry', siname=ind, columns=columns, percent=percent))
+
+        if saveto != None and not tops.empty:
             f = os.path.normpath(self.datapath + '/' + saveto)
-            tops_df.to_csv(f)
-        return tops_df
+            tops.to_csv(f)
+        return tops
 
     def _get_sector_industry_mean(self, secind, key, item=str()):
         """
@@ -225,13 +271,13 @@ class Index(object):
         tags = [secind] + key
         lines = []
         if len(item) > 0:
-            stocks = self._get_sector_industry(secind, item)
+            stocks = self._get_tickers_of_sector_industry(secind, item)
             lines.append([item] + stocks[key].mean().tolist())
         else:
             # dump all items
             uniques = set(self.components[secind].tolist())
             for item in uniques:
-                stocks = self._get_sector_industry(secind, item)
+                stocks = self._get_tickers_of_sector_industry(secind, item)
                 if len(stocks) == 0:
                     continue
                 lines.append([item] + stocks[key].mean().tolist())
@@ -240,42 +286,74 @@ class Index(object):
         stats = stats.set_index(secind)
         return stats
 
-    def get_sector_mean(self, key, item=str()):
+    def _get_sector_industry_median(self, secind, key=list(), item=str()):
+        """
+        Get mean value in the same sector/industry.
+        secind: 'Sector' or 'Industry'
+        item: a specific sector/industry name
+        key: keyword, e.g. 'P/E', 'Price/Book', 'Price/Sales'
+        """
+        if len(key) == 0:
+            key = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'EarningsYield', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+        tags = [secind] + key
+        lines = []
+        if len(item) > 0:
+            stocks = self._get_tickers_of_sector_industry(secind, item)
+            lines.append([item] + stocks[key].median().tolist())
+        else:
+            # dump all items
+            uniques = set(self.components[secind].tolist())
+            for item in uniques:
+                stocks = self._get_tickers_of_sector_industry(secind, item)
+                if len(stocks) == 0:
+                    continue
+                lines.append([item] + stocks[key].median().tolist())
+        stats = DataFrame(lines, columns=tags)
+        stats = stats.drop_duplicates()
+        stats = stats.set_index(secind)
+        return stats
+
+    def get_sector_median(self, columns=list(), sector=str()):
         """
         Get mean value in the same sector.
-        key: (list of) keyword, e.g. ['P/E', 'Price/Book', 'Price/Sales']
-        item: a specific sector/industry name
+        columns: (list of) keyword, e.g. ['P/E', 'Price/Book', 'Price/Sales']
+        sector: a specific sector name
         e.g. nasdaq.get_sector_mean(['P/E', 'Price/Book', 'Price/Sales'])
         """
-        return self._get_sector_industry_mean('Sector', key, item)
+        return self._get_sector_industry_median('Sector', columns, sector)
 
-    def get_industry_mean(self, key, item=str()):
+    def get_industry_median(self, columns=list(), industry=str()):
         """
         Get mean value in the same industry.
-        key: (list of) keyword, e.g. ['P/E', 'Price/Book', 'Price/Sales']
-        item: a specific sector/industry name
+        columns: (list of) keyword, e.g. ['P/E', 'Price/Book', 'Price/Sales']
+        industry: a specific industry name
 
         e.g.
-            nasdaq.get_industry_mean(['P/E', 'Price/Book', 'Price/Sales'])
+            nasdaq.get_industry_median(['P/E', 'Price/Book', 'Price/Sales'])
             value_keys = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
-            nasdaq.get_industry_mean(value_keys, item='RETAIL: Building Materials')
+            nasdaq.get_industry_median(value_keys, item='RETAIL: Building Materials')
         """
-        return self._get_sector_industry_mean('Industry', key, item)
+        return self._get_sector_industry_median('Industry', columns, industry)
 
-    def _compare_to_sector_industry(self, stocks, secind, columns=[]):
+    def _compare_to_sector_industry(self, stocks, secind, columns=[], how='median'):
         """
         Compare a list of stocks to their sectors/industries.
 
         stocks: a list of stock tickers
         secind: 'Sector' or 'Industry'
         columns: a list of attributes to be compared
+        how: 'median', 'top'
         """
         if type(stocks) != list:
             print('Error: a list of tickers is expected.')
             return
         if len(columns) == 0:
-            columns = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+            columns = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'EarningsYield', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+
         tags = ['Items'] + columns
+        if how == 'top':
+            tags += ['Score']
+
         sidict = dict() # 'Sector/Industry' : [[]]
         for s in stocks:
             if s not in self.components.index:
@@ -289,9 +367,10 @@ class Index(object):
             else:
                 sidict[sec_ind].append(line)
 
+        # TODO: add compare to top
         lines = []
         for sec_ind in sidict:
-            lines.append([sec_ind] + self._get_sector_industry_mean(secind, columns, item=sec_ind).iloc[-1].tolist())
+            lines.append([sec_ind] + self._get_sector_industry_median(secind, columns, item=sec_ind).iloc[-1].tolist())
             for l in sidict[sec_ind]:
                 lines.append(l)
         stats = DataFrame(lines, columns=tags)
@@ -318,7 +397,7 @@ class Index(object):
         """
         return self._compare_to_sector_industry(stocks, 'Industry', columns)
 
-    def compare(self, stocks, columns=None):
+    def compare_stocks(self, stocks, columns=None):
         """
         Compare stocks using given attributes.
 
