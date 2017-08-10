@@ -186,7 +186,7 @@ class Index(object):
             self.get_stats()
 
         if len(columns) == 0:
-            columns = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'EarningsYield', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+            columns = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
 
         symbols = self._get_tickers_of_sector_industry(secind, siname)
         if symbols.empty:
@@ -696,15 +696,22 @@ class NASDAQ(Index):
         self.components.dropna(axis=1, inplace=True)
 
         # remove unwanted chars from Symbol
-        symbols = [''] * len(self.components)
-        for i in range(0, len(self.components)):
-            symbols[i] = self.components.index[i].strip()
+        symbols = self.components.index.str.strip()
         symbols = pd.Series(symbols, name='Symbol')
         self.components.reset_index(inplace=True)
         self.components.drop('Symbol', axis=1, inplace=True)
         self.components = self.components.join(symbols)
         self.components = self.components.drop_duplicates(subset=['Symbol']) # drop duplicated symbols
         self.components.set_index('Symbol', inplace=True)
+
+        # remove spaces from Sector and Industry
+        sector = self.components['Sector'].str.strip()
+        industry = self.components['Industry'].str.replace(' ','')
+        self.components.drop('Sector', axis=1, inplace=True)
+        self.components.drop('Industry', axis=1, inplace=True)
+        self.components = self.components.join(sector)
+        self.components = self.components.join(industry)
+
         self.components.sort_index(inplace=True) # sort symbols alphabetically
 
         self.components.to_csv(companylist)
