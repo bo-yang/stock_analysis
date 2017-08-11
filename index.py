@@ -11,6 +11,7 @@ class Index(object):
         self.datapath = os.path.normpath(datapath + '/' + name)
         self.datafile = self.datapath + '/components.csv'
         self.components = components # index 'Symbol'
+        self.value_attrib = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin', 'PriceIn52weekRange']
         if loaddata:
             self.sym.get_quotes()
             self.load_data(from_file=True)
@@ -25,7 +26,7 @@ class Index(object):
     # Helper function for parallel-computing
     def _get_single_compo_stat(self, args):
         sym = args[0]
-        quote = args[1].dropna() # DataFrame
+        quote = args[1].dropna(how='all') # DataFrame
         if quote.empty:
             return DataFrame()
         print('Processing ' + sym + ' ...') # FIXME: TEST ONLY
@@ -186,7 +187,7 @@ class Index(object):
             self.get_stats()
 
         if len(columns) == 0:
-            columns = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+            columns = self.value_attrib
 
         symbols = self._get_tickers_of_sector_industry(secind, siname)
         if symbols.empty:
@@ -294,7 +295,7 @@ class Index(object):
         key: keyword, e.g. 'P/E', 'Price/Book', 'Price/Sales'
         """
         if len(key) == 0:
-            key = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'EarningsYield', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+            key = self.value_attrib
         tags = [secind] + key
         lines = []
         if len(item) > 0:
@@ -330,8 +331,8 @@ class Index(object):
 
         e.g.
             nasdaq.get_industry_median(['P/E', 'Price/Book', 'Price/Sales'])
-            value_keys = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
-            nasdaq.get_industry_median(value_keys, item='RETAIL: Building Materials')
+            value_attrib = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+            nasdaq.get_industry_median(value_attrib, item='RETAIL: Building Materials')
         """
         return self._get_sector_industry_median('Industry', columns, industry)
 
@@ -348,7 +349,7 @@ class Index(object):
             print('Error: a list of tickers is expected.')
             return
         if len(columns) == 0:
-            columns = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'EarningsYield', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+            columns = self.value_attrib
 
         tags = ['Items'] + columns
         if how == 'top':

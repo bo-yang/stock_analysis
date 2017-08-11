@@ -358,14 +358,14 @@ class Symbol:
         [quart_ret_avg, quart_ret_median] = self.return_periodic(periods=13, freq='90D') # quarterly returns in the past 3 years
         [monthly_ret_avg, monthly_ret_median] = self.return_periodic(periods=25, freq='30D') #  monthly returns in the past 2 years
 
-        adj_close = self.quotes.loc[one_year_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'), self._adj_close()].dropna()
+        adj_close = self.quotes.loc[one_year_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'), self._adj_close()].dropna(how='all')
         if not adj_close.empty and len(adj_close) > 0:
             current = adj_close[-1]
             last_year_growth = current - adj_close[0]
             # Current price in 52-week range should between [0, 1] - larger number means more expensive.
             pos_in_range = (current - adj_close.min()) / (adj_close.max() - adj_close.min())
 
-            adj_close = self.quotes.loc[three_month_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'), self._adj_close()].dropna()
+            adj_close = self.quotes.loc[three_month_ago.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d'), self._adj_close()].dropna(how='all')
             if not adj_close.empty and len(adj_close) > 0:
                 last_quarter_growth = adj_close[-1] - adj_close[0]
             else:
@@ -391,7 +391,7 @@ class Symbol:
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         stock = self.quotes[self._adj_close()]
         move_avg = pd.Series(moving_average(stock, n, type='simple'), index=stock.index)
-        return move_avg[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
+        return move_avg[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna(how='all')
 
     def ema(self, n=10, start=None, end=None):
         """
@@ -407,7 +407,7 @@ class Symbol:
         tmp_start = start_date - BDay(n) # The first n days are used for init, so go back for n business days
         stock = self.quotes[self._adj_close()][tmp_start.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
         avg = pd.Series(moving_average(stock, n, type='exponential'), index=stock.index)
-        return avg[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
+        return avg[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna(how='all')
 
     def diverge_to_index(self, index, n=10, start=None, end=None):
         """
@@ -428,8 +428,8 @@ class Symbol:
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         # use the latest available starting date
         start_date = max(to_date(self.quotes.first_valid_index()), to_date(index.quotes.first_valid_index()), start_date)
-        move_avg_index = index.ema(n, start_date, end_date).dropna()
-        move_avg_symbol = self.ema(n, start_date, end_date).dropna()
+        move_avg_index = index.ema(n, start_date, end_date).dropna(how='all')
+        move_avg_symbol = self.ema(n, start_date, end_date).dropna(how='all')
         if move_avg_symbol.empty or move_avg_index.empty:
             return np.nan
         move_avg_index /= move_avg_index[0] # normalization
@@ -453,8 +453,8 @@ class Symbol:
         [start_date, end_date] = self._handle_start_end_dates(start, end)
         # use the latest available starting date
         start_date = max(to_date(self.quotes.first_valid_index()), to_date(index.quotes.first_valid_index()), start_date)
-        stock_quote = self.quotes[self._adj_close()][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
-        index_quote = index.quotes[self._adj_close()][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna()
+        stock_quote = self.quotes[self._adj_close()][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna(how='all')
+        index_quote = index.quotes[self._adj_close()][start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')].dropna(how='all')
         if stock_quote.empty or index_quote.empty:
             return np.nan
         stock_growth = str2num(stock_quote[-1]) / str2num(stock_quote[0])
@@ -646,9 +646,9 @@ class Symbol:
         if len(revenue) > 0:
             revenue_momentum = find_trend(revenue, fit_poly=False)
             profit_margins = net_income / revenue
-            profit_margin_moment = find_trend(profit_margins.dropna(), fit_poly=False)
+            profit_margin_moment = find_trend(profit_margins.dropna(how='all'), fit_poly=False)
             operating_margins = operate_income / revenue
-            operate_margin_moment = find_trend(operating_margins.dropna(), fit_poly=False)
+            operate_margin_moment = find_trend(operating_margins.dropna(how='all'), fit_poly=False)
         else:
             revenue_momentum = 0
             profit_margins = np.zeros(4)
@@ -657,17 +657,17 @@ class Symbol:
             operate_margin_moment = 0
 
         if len(total_assets) > 0:
-            asset_momentum = find_trend(total_assets.dropna(), fit_poly=False)
+            asset_momentum = find_trend(total_assets.dropna(how='all'), fit_poly=False)
             debt_to_assets = total_debt / total_assets
-            debt_assets_moment = find_trend(debt_to_assets.dropna(), fit_poly=False)
+            debt_assets_moment = find_trend(debt_to_assets.dropna(how='all'), fit_poly=False)
         else:
             asset_momentum = 0
             debt_to_assets = np.zeros(4)
             debt_assets_moment = 0
 
-        cash_operate_moment = find_trend(cash_operating.dropna(), fit_poly=False)
-        cash_invest_moment = find_trend(cash_investing.dropna(), fit_poly=False)
-        cash_finance_moment = find_trend(cash_financing.dropna(), fit_poly=False)
+        cash_operate_moment = find_trend(cash_operating.dropna(how='all'), fit_poly=False)
+        cash_invest_moment = find_trend(cash_investing.dropna(how='all'), fit_poly=False)
+        cash_finance_moment = find_trend(cash_financing.dropna(how='all'), fit_poly=False)
 
         stats = [[self.sym, revenue_momentum, profit_margins[-1], profit_margins.mean(), profit_margin_moment, operating_margins[-1], operating_margins.mean(), operate_margin_moment, asset_momentum, debt_to_assets[-1], debt_to_assets.mean(), debt_assets_moment, cash_operate_moment, cash_invest_moment, cash_finance_moment]]
         stats_df = DataFrame(stats, columns=labels)
