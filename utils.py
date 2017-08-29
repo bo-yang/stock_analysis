@@ -261,20 +261,23 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
     for sym in sym_list:
         line = [sym]
         # download stats
-        try:
-            stock = Share(sym)
-        except:
-            print('Warning: YQL query faied for %s, try again...' %sym)
-            time.sleep(1)
+        success = False
+        for n_tries in range(0,5): # try at most 5 times
             try:
                 stock = Share(sym)
+                success = True
+                break
             except:
-                print('!!!Error: failed to get stats from YQL for sym %s!!!' %sym)
-                if not exclude_name:
-                    line += ["N/A"]
-                line += [0]*len(real_tags)
-                lines.append(line)
+                print('Warning: YQL query faied for %s, try again...' %sym)
                 continue
+        
+        if not success:
+            print('!!!Error: failed to get stats from YQL for sym %s!!!' %sym)
+            if not exclude_name:
+                line += ["N/A"]
+            line += [0]*len(real_tags)
+            lines.append(line)
+
         if not exclude_name:
             line += [stock.get_name()]
         line += [str2num(stock.get_market_cap(), m2b=True), str2num(stock.get_volume()),
