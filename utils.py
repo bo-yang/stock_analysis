@@ -269,6 +269,7 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
                 break
             except:
                 print('Warning: YQL query faied for %s, try again...' %sym)
+                time.sleep(0.1 * random.randint(0,10))
                 continue
         
         if success:
