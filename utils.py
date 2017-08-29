@@ -262,7 +262,7 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
         line = [sym]
         # download stats
         success = False
-        for n_tries in range(0,5): # try at most 5 times
+        for n_tries in range(0,4): # try at most 4 times
             try:
                 stock = Share(sym)
                 success = True
@@ -271,26 +271,26 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
                 print('Warning: YQL query faied for %s, try again...' %sym)
                 continue
         
-        if not success:
+        if success:
+            if not exclude_name:
+                line += [stock.get_name()]
+            line += [str2num(stock.get_market_cap(), m2b=True), str2num(stock.get_volume()),
+                    str2num(stock.get_avg_daily_volume()), str2num(stock.get_book_value()),
+                    str2num(stock.get_price_earnings_ratio()), str2num(stock.get_price_earnings_growth_ratio()),
+                    str2num(stock.get_price_sales()), str2num(stock.get_price_book()), str2num(stock.get_ebitda()),
+                    str2num(stock.get_earnings_share()), str2num(stock.get_EPS_estimate_next_quarter()),
+                    str2num(stock.get_EPS_estimate_current_year()), str2num(stock.get_EPS_estimate_next_year()),
+                    str2num(stock.get_one_yr_target_price()), str2num(stock.get_price_EPS_estimate_current_year()),
+                    str2num(stock.get_price_EPS_estimate_next_year()), str2num(stock.get_short_ratio()),
+                    str2num(stock.get_dividend_share()), str2num(stock.get_dividend_yield()), stock.get_dividend_pay_date(),
+                    stock.get_ex_dividend_date()]
+            lines.append(line)
+        else:
             print('!!!Error: failed to get stats from YQL for sym %s!!!' %sym)
             if not exclude_name:
                 line += ["N/A"]
             line += [0]*len(real_tags)
             lines.append(line)
-
-        if not exclude_name:
-            line += [stock.get_name()]
-        line += [str2num(stock.get_market_cap(), m2b=True), str2num(stock.get_volume()),
-                str2num(stock.get_avg_daily_volume()), str2num(stock.get_book_value()),
-                str2num(stock.get_price_earnings_ratio()), str2num(stock.get_price_earnings_growth_ratio()),
-                str2num(stock.get_price_sales()), str2num(stock.get_price_book()), str2num(stock.get_ebitda()),
-                str2num(stock.get_earnings_share()), str2num(stock.get_EPS_estimate_next_quarter()),
-                str2num(stock.get_EPS_estimate_current_year()), str2num(stock.get_EPS_estimate_next_year()),
-                str2num(stock.get_one_yr_target_price()), str2num(stock.get_price_EPS_estimate_current_year()),
-                str2num(stock.get_price_EPS_estimate_next_year()), str2num(stock.get_short_ratio()),
-                str2num(stock.get_dividend_share()), str2num(stock.get_dividend_yield()), stock.get_dividend_pay_date(),
-                stock.get_ex_dividend_date()]
-        lines.append(line)
 
     stats = DataFrame(lines, columns=tags)
     stats = stats.drop_duplicates()
