@@ -204,18 +204,20 @@ class Index(object):
         #
         # suppress noises
         symbols /= symbols.median()
-        m = (symbols <= symbols.median()*20)
-        symbols = symbols.where(m, np.nan).replace(np.nan, 1)
-        m = (symbols >= -np.abs(symbols.median()*20))
-        symbols = symbols.where(m, np.nan).replace(np.nan, 0)
+        upper_limit = symbols.median() * 20
+        m = (symbols <= upper_limit)
+        symbols = symbols.where(m, np.nan).replace(np.nan, upper_limit)
+        lower_limit = -np.abs(upper_limit)
+        m = (symbols >= lower_limit)
+        symbols = symbols.where(m, np.nan).replace(np.nan, lower_limit)
         # normalization
         col_max = symbols.max()
         col_min = symbols.min()
         symbols = (symbols - col_min) / (col_max - col_min)
-        symbols = np.exp(symbols) / np.sum(np.exp(symbols)) # softmax
 
         # calc scores for each symbol based on columns
         scores = symbols[asccols].transpose().sum() + (1 - symbols[descols]).transpose().sum()
+        scores = np.exp(scores) / np.sum(np.exp(scores)) # softmax
         scores.name = 'Score'
         symbols = orig_symbols.join(scores)
 
