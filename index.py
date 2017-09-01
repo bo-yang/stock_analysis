@@ -216,7 +216,7 @@ class Index(object):
         symbols = (symbols - col_min) / (col_max - col_min)
 
         # calc scores for each symbol based on columns
-        scores = symbols[asccols].transpose().sum() + (1 - symbols[descols]).transpose().sum()
+        scores = symbols[asccols].sum(axis=1) + (1 - symbols[descols]).sum(axis=1)
         scores = np.exp(scores) / np.sum(np.exp(scores)) # softmax
         scores.name = 'Score'
         symbols = orig_symbols.join(scores)
