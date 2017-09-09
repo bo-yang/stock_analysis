@@ -3,11 +3,11 @@ from stock_analysis.symbol import *
 from stock_analysis.index import *
 
 # True - the larger the better, False - the smaller the better
-rank_tags_growth = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'PriceIn52weekRange':False}
-rank_tags_reliable = {'MedianQuarterlyReturn':False, 'AvgQuarterlyReturn':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyDivergeIndex':False}
+rank_tags_growth = {'MedianQuarterlyReturn':True, 'QuarterlyRelativeGrowth':True, 'PriceIn52weekRange':False}
+rank_tags_reliable = {'MedianQuarterlyReturn':False, 'QuarterlyRelativeGrowth':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyRelativeGrowth':False}
 rank_tags_value = {'EarningsYield':True, 'ReturnOnCapital':True}
-rank_tags_hybrid = {'EarningsYield':True, 'ReturnOnCapital':True, 'EPSGrowth':True, 'AvgQuarterlyReturn':True,'PriceIn52weekRange':False}
-rank_tags_hybrid2 = {'MedianQuarterlyReturn':True, 'AvgQuarterlyReturn':True, 'RevenueMomentum':True, 'ProfitMarginMomentum':True, 'Debt/Assets Momentum':False, 'EPSGrowth':True, 'PEG':False, 'Forward P/E':False, 'Price/Book':False, 'PriceIn52weekRange':False, 'EarningsYield':True, 'ReturnOnCapital':True}
+rank_tags_hybrid = {'EarningsYield':True, 'ReturnOnCapital':True, 'EPSGrowth':True, 'QuarterlyRelativeGrowth':True,'PriceIn52weekRange':False}
+rank_tags_hybrid2 = {'MedianQuarterlyReturn':True, 'QuarterlyRelativeGrowth':True, 'RevenueMomentum':True, 'ProfitMarginMomentum':True, 'Debt/Assets Momentum':False, 'EPSGrowth':True, 'PEG':False, 'Forward P/E':False, 'Price/Book':False, 'PriceIn52weekRange':False, 'EarningsYield':True, 'ReturnOnCapital':True}
 
 blacklist = ['WINS', 'ENIC', 'LEXEB', 'LAUR', 'BGCA', 'AEK', 'MBT', 'VIP', 'BMA', 'EOCC', 'SID', 'HNP', 'PDP', 'GGAL',
         'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI', 'PAM',
@@ -53,7 +53,7 @@ def value_analysis(index):
 
     # Ranking stocks
     stock_rank = ranking(stocks_value, tags=rank_tags_value, rank='sort')
-    stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['LastWeekReturn', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange', 'Sector', 'Industry']])
+    stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['LastWeekReturn', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'YearlyRelativeGrowth', 'PriceIn52weekRange', 'Sector', 'Industry']])
     saveto = 'data/%s_value.csv' %index.name
     stock_rank.to_csv(saveto)
     #print(stock_rank.to_string())
@@ -95,9 +95,9 @@ def check_relative_growth(sym, index=NASDAQ()):
         print('Error: %s not in index.' %sym)
         return pd.Series()
     stat = index.components.loc[sym]
-    return stat.loc[['RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'RelativeGrowthLast2Years', 'RelativeGrowthLast3Years', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth']]
+    return stat.loc[['RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'RelativeGrowthLast2Years', 'RelativeGrowthLast3Years', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'YearlyRelativeGrowth']]
 
-def grow_and_value(index, ref_index=NASDAQ(), slowdown=False, dropna=True, saveto=None):
+def grow_and_value(index, ref_index=NASDAQ(), dropna=True, saveto=None):
     """
     Filter out fast growing stocks with value analysis. This strategy picks
     1. Stocks that have solid fundamentals and outperform their respective industries or benchmarks.
@@ -114,17 +114,15 @@ def grow_and_value(index, ref_index=NASDAQ(), slowdown=False, dropna=True, savet
         ref_index = index # value analysis of itself
 
     # fast growing stocks that still outperform the index recently
-    if not slowdown:
-        rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1.0), ('RelativeGrowthLastMonth','>', 0.98), ('RelativeGrowthLastWeek','>=', 0.95), ('MonthlyRelativeGrowth', '>', 1.0), ('WeeklyRelativeGrowth', '>', 1.0)]
-        #rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('MonthlyRelativeGrowth', '>', 1.0), ('WeeklyRelativeGrowth', '>=', 'MonthlyRelativeGrowth')]
-    else:
-        rules = [('AvgQuarterlyReturn', '>', 0.05), ('MedianQuarterlyReturn', '>', 0.03), ('QuarterlyRelativeGrowth', '>', 1), ('MonthlyRelativeGrowth', '>=', 0.98), ('WeeklyRelativeGrowth', '<', 1.0)]
+    rules = [('WeeklyRelativeGrowth', '>', 1.0), ('MonthlyRelativeGrowth', '>', 1.0), ('QuarterlyRelativeGrowth', '>', 1.01), ('MedianQuarterlyReturn', '>', 0.03), ('RelativeGrowthLastYear', '>', 0.5), ('RelativeGrowthHalfYear', '>', 0.5), ('RelativeGrowthLastQuarter', '>', 1.0), ('RelativeGrowthLastMonth','>=', 0.96), ('RelativeGrowthLastWeek','>=', 0.95)]
+    #rules = [('QuarterlyRelativeGrowth', '>', 1.01), ('MedianQuarterlyReturn', '>', 0.03), ('MonthlyRelativeGrowth', '>', 1.0), ('WeeklyRelativeGrowth', '>=', 'MonthlyRelativeGrowth')]
+
     index_grow = index.filter_by_compare(rules)
     ref_value = value_analysis(ref_index)
     if len(ref_value) == 0:
         return DataFrame()
 
-    index_value_grow = ref_value.loc[index_grow.index][['Total', 'LastWeekReturn', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
+    index_value_grow = ref_value.loc[index_grow.index][['Total', 'LastWeekReturn', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'YearlyRelativeGrowth', 'PriceIn52weekRange']]
     if dropna:
         index_value_grow.dropna(inplace=True, how='all')
 
@@ -133,17 +131,22 @@ def grow_and_value(index, ref_index=NASDAQ(), slowdown=False, dropna=True, savet
 
     return index_value_grow
 
-def fast_grow(index):
+def trend_change(index, speedup=True):
     """
-    Stocks that grow fast in the past year.
+    Filtering out stocks that grow faster or slowdown.
+
+    speedup: true - grow faster, false - slow down
     """
     if not issubclass(type(index), Index):
         print('Error: only Index type is supported.')
         return DataFrame()
 
-    rules = [('1YearReturn', '>=', 1), ('MonthlyRelativeGrowth', '>', 1.0), ('WeeklyRelativeGrowth', '>', 1.0), ('RelativeGrowthLast3Years','>', 1), ('RelativeGrowthLast2Years','>', 1), ('RelativeGrowthLastYear','>', 1), ('RelativeGrowthLastQuarter','>', 1), ('RelativeGrowthLastMonth','>', 1), ('RelativeGrowthLastWeek','>=', 0.98)]
+    if speedup:
+        rules = [('WeeklyRelativeGrowth', '>=', 'MonthlyRelativeGrowth'), ('MonthlyRelativeGrowth', '>', 'QuarterlyRelativeGrowth'), ('QuarterlyRelativeGrowth', '>=', ('YearlyRelativeGrowth', '*=', 0.6)), ('MonthlyRelativeGrowth', '>', 1.0), ('QuarterlyRelativeGrowth', '>', 0.9)]
+    else:
+        rules = [('QuarterlyRelativeGrowth', '>', 1), ('WeeklyRelativeGrowth', '<', 'MonthlyRelativeGrowth'), ('MonthlyRelativeGrowth', '>', 'QuarterlyRelativeGrowth')]
     stocks_grow = index.filter_by_compare(rules)
-    return stocks_grow[['1YearReturn', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']]
+    return stocks_grow[['WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'YearlyRelativeGrowth', 'PriceIn52weekRange']]
 
 def turnover_and_value(index):
     """
@@ -152,12 +155,12 @@ def turnover_and_value(index):
     if not issubclass(type(index), Index):
         print('Error: only Index type is supported.')
         return DataFrame()
-    #rules = [('LastQuarterDivergeIndex', '>', 0), ('LastQuarterDivergeIndex', '>=', ('HalfYearDivergeIndex', '*=', 0.6)), ('LastQuarterDivergeIndex', '>=', ('1YearDivergeIndex', '*=', 0.4))]
     rules = [('WeeklyRelativeGrowth', '>', 1.0), ('MonthlyRelativeGrowth', '<=', 0.98)]
     index_grow = index.filter_by_compare(rules)
     index_value = value_analysis(index)
-    stocks = index_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'AvgQuarterlyReturn', 'PriceIn52weekRange']].dropna(how='all')
+    stocks = index_value.loc[index_grow.index][['Total', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'PriceIn52weekRange']].dropna(how='all')
     return stocks
+
 
 def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
     """
@@ -186,23 +189,6 @@ def ranking(stocks, tags=rank_tags_hybrid2, rank='range', saveto=None):
     if saveto != None and len(table) > 0:
         table.to_csv(saveto)
     return table
-
-def new_high(index):
-    """
-    Filter out stocks at 52-week high. Parameters are:
-    - Current Price/52-week High greater than or equal to 80%.
-    - (12-Week Price Change)% greater than 0.
-    - (4-Week Price Change)% greater than 0
-    - Analysts ranking "Strong Buy"
-    - Price/Sales ratio less than or equal to industry median.
-    - P/E less than or equal to industry median.
-    - Projected one-year EPS growth F(1)/F(0) greater than or equal to industry median.
-    - Current average 20-day volume greater than previous week's average 20-day volume.
-      This helps find stocks where the volume has increased in the recent week vs. the previous week. If the price is climbing on increased volune, that shows increased demand or buying coming in. And the more buying demand there's for stock, the more it should climb.
-    - Above parameters are applied to stocks with a price greater than or equal to $5 and an average 20-day volume of greater than or equal to 100,000 shares.
-    - (12-Week Price Change)% + (4-Week Price Change)% == top #5
-    """
-    return DataFrame()
 
 def ranking_by_range(symbols, tags):
     """
@@ -271,12 +257,11 @@ def filter_by_sort(stocks, columns, n=-1, saveto=None):
              To specify different orders for different columns, a dict can be used.
 
     For example:
-        cheap={'AvgQuarterlyReturn':False, 'LastQuarterReturn':True, 'PriceIn52weekRange':True}
-        reliable={'MedianQuarterlyReturn':False, 'AvgQuarterlyReturn':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyDivergeIndex':False}
-        reliable=['HalfYearDivergeIndex', '1YearDivergeIndex','2YearDivergeIndex', '3YearDivergeIndex','YearlyDivergeIndex']
-        buy={'AvgQuarterlyReturn':False, 'MedianQuarterlyReturn':False, 'PriceIn52weekRange':True, 'AvgFSTOLastMonth':True}
+        cheap={'QuarterlyRelativeGrowth':False, 'LastQuarterReturn':True, 'PriceIn52weekRange':True}
+        reliable={'MedianQuarterlyReturn':False, 'QuarterlyRelativeGrowth':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyRelativeGrowth':False}
+        buy={'QuarterlyRelativeGrowth':False, 'MedianQuarterlyReturn':False, 'PriceIn52weekRange':True, 'AvgFSTOLastMonth':True}
         value = {'EarningsYield':False, 'ReturnOnCapital':False, 'EPSGrowth':False}
-        score = {'AvgQuarterlyReturn':False, 'Total': True}
+        score = {'QuarterlyRelativeGrowth':False, 'Total': True}
     where 'True' means ascending=True, and 'False' means ascending=False.
     """
     if type(stocks) == pd.DataFrame:
@@ -303,10 +288,10 @@ def filter_by_compare(stocks, rules, saveto=None):
 
     For example:
         rules = [('EPSEstimateCurrentYear', '>', 'EPS'), ('PriceIn52weekRange', '<=', 0.7)]
-        rules = [('LastMonthReturn', '>', 0), ('LastMonthReturn', '>', 'LastQuarterReturn'), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastMonth', '>', 'RelativeGrowthLastQuarter'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('AvgQuarterlyReturn', '>', 0.03)]
-        rules = [('LastMonthReturn', '>', 0), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('AvgQuarterlyReturn', '>', 0.03)]
-        rules = [('AvgQuarterlyReturn', '>', 0.03), ('MedianQuarterlyReturn', '>', 0.03), ('PriceIn52weekRange', '<=', 0.8)]
-        rules = [('EPS', '>=', 0), ('MarketCap', '>', 2), ('AvgMonthlyReturn', '>', 0.007), ('AvgQuarterlyReturn', '>', 0.04), ('MedianQuarterlyReturn', '>', 0.04)]
+        rules = [('LastMonthReturn', '>', 0), ('LastMonthReturn', '>', 'LastQuarterReturn'), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastMonth', '>', 'RelativeGrowthLastQuarter'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('QuarterlyRelativeGrowth', '>', 1)]
+        rules = [('LastMonthReturn', '>', 0), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('QuarterlyRelativeGrowth', '>', 1)]
+        rules = [('QuarterlyRelativeGrowth', '>', 1), ('MedianQuarterlyReturn', '>', 0.03), ('PriceIn52weekRange', '<=', 0.8)]
+        rules = [('EPS', '>=', 0), ('MarketCap', '>', 2), ('AvgMonthlyReturn', '>', 0.007), ('QuarterlyRelativeGrowth', '>', 1), ('MedianQuarterlyReturn', '>', 0.04)]
         rules = [('EPS', '>=', 0), ('MarketCap', '>', 2)]
     """
     if type(stocks) == pd.DataFrame:
@@ -329,6 +314,7 @@ def filter_by_compare(stocks, rules, saveto=None):
 
     return stats
 
+
 def strategy_growth():
     """
     Calculate stats of stock growth.
@@ -350,9 +336,27 @@ def strategy_growth():
 
     Average 20-day Volume greater than or equal to 50,000 - high trading volume implies that the stocks have adequate liquidity.
     """
-    rules = [('EPSEstimateCurrentYear', '>', 'LastYearGrowth'), ('LastMonthReturn', '>', 'LastQuarterReturn'), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastMonth', '>', 'RelativeGrowthLastQuarter'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('AvgQuarterlyReturn', '>', 0.03)]
+    rules = [('EPSEstimateCurrentYear', '>', 'LastYearGrowth'), ('LastMonthReturn', '>', 'LastQuarterReturn'), ('LastQuarterReturn', '>', 'HalfYearReturn'), ('RelativeGrowthLastMonth', '>', 'RelativeGrowthLastQuarter'), ('RelativeGrowthLastQuarter', '>','RelativeGrowthHalfYear'), ('LastQuarterReturn', '>=', ('HalfYearReturn', '*=', 1.2)), ('QuarterlyRelativeGrowth', '>', 1)]
     #TODO:
     return
+
+def new_high(index):
+    """
+    Filter out stocks at 52-week high. Parameters are:
+    - Current Price/52-week High greater than or equal to 80%.
+    - (12-Week Price Change)% greater than 0.
+    - (4-Week Price Change)% greater than 0
+    - Analysts ranking "Strong Buy"
+    - Price/Sales ratio less than or equal to industry median.
+    - P/E less than or equal to industry median.
+    - Projected one-year EPS growth F(1)/F(0) greater than or equal to industry median.
+    - Current average 20-day volume greater than previous week's average 20-day volume.
+      This helps find stocks where the volume has increased in the recent week vs. the previous week. If the price is climbing on increased volune, that shows increased demand or buying coming in. And the more buying demand there's for stock, the more it should climb.
+    - Above parameters are applied to stocks with a price greater than or equal to $5 and an average 20-day volume of greater than or equal to 100,000 shares.
+    - (12-Week Price Change)% + (4-Week Price Change)% == top #5
+    """
+    # TODO:
+    return DataFrame()
 
 def price_table(stocks):
     """

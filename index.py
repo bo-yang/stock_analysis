@@ -434,8 +434,7 @@ class Index(object):
                  To specify different orders for different columns, a dict can be used.
         For example:
             cheap={'AvgQuarterlyReturn':False, 'LastQuarterReturn':True, 'PriceIn52weekRange':True}
-            reliable={'MedianQuarterlyReturn':False, 'AvgQuarterlyReturn':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyDivergeIndex':False}
-            reliable=['HalfYearDivergeIndex', '1YearDivergeIndex','2YearDivergeIndex', '3YearDivergeIndex','YearlyDivergeIndex']
+            reliable={'MedianQuarterlyReturn':False, 'AvgQuarterlyReturn':False, 'MedianYearlyReturn':False, 'AvgYearlyReturn':False, 'YearlyRelativeGrowth':False}
             buy={'AvgQuarterlyReturn':False, 'MedianQuarterlyReturn':False, 'PriceIn52weekRange':True, 'AvgFSTOLastMonth':True}
         where 'True' means ascending=True, and 'False' means ascending=False.
         """
@@ -519,6 +518,7 @@ class Index(object):
             if (type(rule[2]) == str) and (rule[2] in stats.columns):
                 cut = stats[rule[2]]
             elif (type(rule[2]) == tuple) and (len(rule[2]) == 3):
+                # an embeded 3-tuple rule
                 r = rule[2]
                 cut = operate(stats[r[0]], r[1], r[2])
             else:

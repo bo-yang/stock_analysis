@@ -480,7 +480,7 @@ class Symbol:
 
     def relative_growth_stats(self, index=None):
         """
-        Calculate stats of divergence to S&P 500.
+        Calculate stats of relative growth to S&P 500.
 
         index: a Symbol class of index, e.g. S&P 500.
         """
@@ -493,7 +493,7 @@ class Symbol:
         if self.quotes.empty or index.quotes.empty:
             return DataFrame()
 
-        labels = ['Symbol', 'RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'RelativeGrowthLast2Years', 'RelativeGrowthLast3Years', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'LastQuarterDivergeIndex', 'HalfYearDivergeIndex', '1YearDivergeIndex', '2YearDivergeIndex', '3YearDivergeIndex', 'QuarterlyDivergeIndex', 'YearlyDivergeIndex']
+        labels = ['Symbol', 'RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'RelativeGrowthLast2Years', 'RelativeGrowthLast3Years', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'YearlyRelativeGrowth']
         [end_date, one_week_ago, one_month_ago, three_month_ago, half_year_ago, one_year_ago, two_year_ago, three_year_ago, five_year_ago] = get_stats_intervals(self.end_date)
         relative_growth_one_week = self.relative_growth(index, start=one_week_ago, end=end_date)
         relative_growth_one_month = self.relative_growth(index, start=one_month_ago, end=end_date)
@@ -503,24 +503,20 @@ class Symbol:
         relative_growth_two_year = self.relative_growth(index, start=two_year_ago, end=end_date)
         relative_growth_three_year = self.relative_growth(index, start=three_year_ago, end=end_date)
 
-        last_quarter_diverge = self.diverge_to_index(index, start=three_month_ago, end=end_date)
-        half_year_diverge = self.diverge_to_index(index, start=half_year_ago, end=end_date)
-        one_year_diverge = self.diverge_to_index(index, start=one_year_ago, end=end_date)
-        two_year_diverge = self.diverge_to_index(index, start=two_year_ago, end=end_date)
-        three_year_diverge = self.diverge_to_index(index, start=three_year_ago, end=end_date)
-
         # periodic stats
         start_date = max(to_date(self.quotes.first_valid_index()), to_date(index.quotes.first_valid_index()) )
         weekly_rel_growth = self._relative_average_periodic(index, start_date, end_date, 13, '7D', self.relative_growth) # The past 3 months
         monthly_rel_growth = self._relative_average_periodic(index, start_date, end_date, 13, '30D', self.relative_growth) # The past 12 months
         quarterly_rel_growth = self._relative_average_periodic(index, start_date, end_date, 13, '90D', self.relative_growth) # The past 3 years
-        quarterly_diverge = self._relative_average_periodic(index, start_date, end_date, 13, '90D', self.diverge_to_index) # The past 3 years
-        yearly_diverge = self._relative_average_periodic(index, start_date, end_date, 6, '365D', self.diverge_to_index) # The past 5 years
+        yearly_rel_growth = self._relative_average_periodic(index, start_date, end_date, 7, '365D', self.relative_growth) # The past 6 years
+
+        # 'QuarterlyDivergeIndex' and 'YearlyDivergeIndex'
+        #quarterly_diverge = self._relative_average_periodic(index, start_date, end_date, 13, '90D', self.diverge_to_index) # The past 3 years
+        #yearly_diverge = self._relative_average_periodic(index, start_date, end_date, 6, '365D', self.diverge_to_index) # The past 5 years
 
         stats = [[self.sym, relative_growth_one_week, relative_growth_one_month, relative_growth_last_quarter, relative_growth_half_year,
                   relative_growth_last_year, relative_growth_two_year, relative_growth_three_year, weekly_rel_growth, monthly_rel_growth,
-                  quarterly_rel_growth, last_quarter_diverge, half_year_diverge, one_year_diverge, two_year_diverge, three_year_diverge,
-                  quarterly_diverge, yearly_diverge]]
+                  quarterly_rel_growth, yearly_rel_growth]]
         stats_df = DataFrame(stats, columns=labels)
         stats_df = stats_df.drop_duplicates()
         stats_df = stats_df.set_index('Symbol')
