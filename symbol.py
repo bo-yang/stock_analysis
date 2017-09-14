@@ -157,8 +157,14 @@ class Symbol:
                 return
 
         # Make sure the current page is the Financial page
-        link=browser.find_element_by_link_text('Financials')
-        link.click()
+        try:
+            link=browser.find_element_by_link_text('Financials')
+            link.click()
+        except:
+            print("Error: Financials link not found for %s, exchange %s" %(self.sym, exchange))
+            if close_browser:
+                browser.close()
+            return
 
         tables=browser.find_elements_by_id('fs-table')
         if len(tables) < 1:
