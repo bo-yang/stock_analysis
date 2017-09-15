@@ -141,13 +141,16 @@ class Symbol:
         if browser == None:
             browser=webdriver.Chrome()
             close_browser = True
+        # set timeout
+        browser.set_page_load_timeout(60)
+        browser.set_script_timeout(45)
 
         # Income Statement
         try:
             browser.get(site)
         except:
             print("Download financial failed, try again...")
-            time.sleep(1)
+            #time.sleep(1)
             try:
                 browser.get(site)
             except:
@@ -156,17 +159,19 @@ class Symbol:
                     browser.close()
                 return
 
-        # Make sure the current page is the Financial page
-        try:
-            link=browser.find_element_by_link_text('Financials')
-            link.click()
-        except:
-            print("Error: Financials link not found for %s, exchange %s" %(self.sym, exchange))
-            if close_browser:
-                browser.close()
-            return
-
         tables=browser.find_elements_by_id('fs-table')
+        if len(tables) < 1:
+            # Make sure the current page is the Financial page
+            try:
+                link=browser.find_element_by_link_text('Financials')
+                link.click()
+                tables=browser.find_elements_by_id('fs-table')
+            except:
+                print("Error: Financials link not found for %s, exchange %s" %(self.sym, exchange))
+                if close_browser:
+                    browser.close()
+                return
+
         if len(tables) < 1:
             print('Error: %s: failed to find income statement, exchange %s.' %(self.sym, exchange))
             if close_browser:
