@@ -123,14 +123,23 @@ class Index(object):
             self.save_data()
         return self.components
 
-    def get_financials(self, update_list=True):
+    def get_financials(self, update_list=True, sym_start=str(), sym_end=str()):
         """
         Download financial data for all stocks.
         """
         if self.components.empty or update_list:
             self.get_compo_list(update_list=True)
+        # slice symbols
+        comp_index = self.components.index
+        istart = 0
+        iend = len(comp_index)
+        if len(sym_start) > 0 and sym_start in comp_index:
+            istart = comp_index.get_loc(sym_start)
+        if len(sym_end) > 0 and sym_end in comp_index:
+            end_idx = comp_index.get_loc(sym_end)
+        # download financials
         browser=webdriver.Chrome()
-        for sym in self.components.index:
+        for sym in comp_index[istart:iend]:
             print('Downloading financial data for ' + sym) # FIXME: TEST ONLY
             stock = Symbol(sym)
             if 'Exchange' in self.components.columns:
