@@ -149,7 +149,7 @@ class Symbol:
         try:
             browser.get(site)
         except:
-            print("Download financial failed, try again...")
+            print("%s: Download financial failed, try again..." %self.sym)
             #time.sleep(1)
             try:
                 browser.get(site)
@@ -159,7 +159,12 @@ class Symbol:
                     browser.close()
                 return
 
-        tables=browser.find_elements_by_id('fs-table')
+        try:
+            tables=browser.find_elements_by_id('fs-table')
+        except:
+            print('Error: timeout when finding \'fs-table\' for %s, exchange %s' %(self.sym, exchange))
+            return
+
         if len(tables) < 1:
             # Make sure the current page is the Financial page
             try:
