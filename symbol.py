@@ -163,6 +163,8 @@ class Symbol:
             tables=browser.find_elements_by_id('fs-table')
         except:
             print('Error: timeout when finding \'fs-table\' for %s, exchange %s' %(self.sym, exchange))
+            if close_browser:
+                browser.close()
             return
 
         if len(tables) < 1:
