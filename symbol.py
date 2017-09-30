@@ -484,11 +484,11 @@ class Symbol:
         index_growth = str2num(index_quote[-1]) / str2num(index_quote[0])
         return stock_growth / index_growth
 
-    def _relative_average_periodic(self, index, start_date, end_date, periods, freq, cb):
+    def _relative_average_periodic(self, index, start_date, end_date, periods, freq, cb, median=False):
         """
         Average of relative growth for given periods
         """
-        average = 0
+        growths = []
         days = pd.date_range(end=end_date, periods=periods, freq=freq)[::-1] # in reverse order
         for i in range(1, len(days)):
             if days[i].date() < start_date:
@@ -497,9 +497,11 @@ class Symbol:
             if np.isnan(diff):
                 break
             else:
-                average += diff
-        average /= i
-        return average
+                growths.append(diff)
+        if median:
+            return np.median(growths)
+        else:
+            return np.mean(growths)
 
     def relative_growth_stats(self, index=None):
         """
