@@ -11,7 +11,7 @@ rank_tags_hybrid2 = {'MedianQuarterlyReturn':True, 'QuarterlyRelativeGrowth':Tru
 
 blacklist = ['WINS', 'ENIC', 'LEXEB', 'LAUR', 'BGCA', 'AEK', 'MBT', 'VIP', 'BMA', 'EOCC', 'SID', 'HNP', 'PDP', 'GGAL',
         'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI', 'PAM',
-        'OEC', 'NORD', 'TAL', 'EDU', 'MELI', 'GLOB', 'SINA']
+        'OEC', 'NORD', 'TAL', 'EDU', 'MELI', 'GLOB', 'SINA', 'BEDU']
 
 def value_analysis(index):
     """

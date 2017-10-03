@@ -484,7 +484,7 @@ class Symbol:
         index_growth = str2num(index_quote[-1]) / str2num(index_quote[0])
         return stock_growth / index_growth
 
-    def _relative_average_periodic(self, index, start_date, end_date, periods, freq, cb, median=False):
+    def _relative_average_periodic(self, index, start_date, end_date, periods, freq, cb, median=True):
         """
         Average of relative growth for given periods
         """
