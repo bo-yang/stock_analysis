@@ -108,7 +108,7 @@ class Index(object):
         num_procs = min(mp.cpu_count(), num_chunks)
         pool = mp.Pool(processes=num_procs)
         steps = np.round(np.linspace(0, len(self.components), num_chunks)).astype(int)
-        args = [(steps[i-1], steps[i]) for i in range(1,len(steps))]
+        args = [(steps[i-1], steps[i]-1) for i in range(1,len(steps))]
         stats = pool.map(self._get_chunk_stats, args)
 
         chunk_stats = DataFrame()
@@ -123,24 +123,17 @@ class Index(object):
             self.save_data()
         return self.components
 
-    def get_financials(self, update_list=True, sym_start=str(), sym_end=str()):
+    def _get_financials_by_chunk(self, args):
         """
-        Download financial data for all stocks.
+        Download financial data for specified chunk.
+        args: a tuple of (istart,iend)
         """
-        if self.components.empty or update_list:
-            self.get_compo_list(update_list=True)
-        # slice symbols
+        (istart, iend) = args
         comp_index = self.components.index
-        istart = 0
-        iend = len(comp_index)
-        if len(sym_start) > 0 and sym_start in comp_index:
-            istart = comp_index.get_loc(sym_start)
-        if len(sym_end) > 0 and sym_end in comp_index:
-            end_idx = comp_index.get_loc(sym_end)
         # download financials
         browser=webdriver.Chrome()
         for sym in comp_index[istart:iend]:
-            print('Downloading financial data for ' + sym) # FIXME: TEST ONLY
+            print('Chunk %s-%s: downloading financial data for %s' %(comp_index[istart], comp_index[iend], sym))
             stock = Symbol(sym)
             if 'Exchange' in self.components.columns:
                 exch = self.components['Exchange'][sym]
@@ -152,6 +145,34 @@ class Index(object):
             stock.get_financials(browser=browser)
             stock.save_financial_data()
         browser.close()
+        return
+
+    def get_financials(self, update_list=True, sym_start=str(), sym_end=str(), num_procs=5):
+        """
+        Download financial data for stocks.
+
+        update_list: True for update index component list, otherwise False.
+        sym_start: the first stock symbol in this index
+        sym_end: the last stock symbol in the index
+        num_procs: number of processes for financial data download in parallel
+        """
+        if self.components.empty or update_list:
+            self.get_compo_list(update_list=True)
+        # slice symbols
+        comp_index = self.components.index
+        istart = 0
+        iend = len(comp_index)
+        if len(sym_start) > 0 and sym_start in comp_index:
+            istart = comp_index.get_loc(sym_start)
+        if len(sym_end) > 0 and sym_end in comp_index:
+            iend = comp_index.get_loc(sym_end)
+        if istart > iend:
+            (istart, iend) = (iend, istart) # make sure end is greater than start
+        # download financials
+        pool = mp.Pool(processes=num_procs)
+        steps = np.round(np.linspace(istart, iend, num_procs)).astype(int)
+        args = [(steps[i-1], steps[i]-1) for i in range(1,len(steps))]
+        stats = pool.map(self._get_financials_by_chunk, args)
         return
 
     def _get_tickers_of_sector_industry(self, secind, key):
