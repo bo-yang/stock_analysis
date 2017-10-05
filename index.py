@@ -147,7 +147,7 @@ class Index(object):
         browser.close()
         return
 
-    def get_financials(self, update_list=True, sym_start=str(), sym_end=str(), num_procs=5):
+    def get_financials(self, update_list=True, sym_start=str(), sym_end=str(), num_procs=6):
         """
         Download financial data for stocks.
 
@@ -170,7 +170,7 @@ class Index(object):
             (istart, iend) = (iend, istart) # make sure end is greater than start
         # download financials
         pool = mp.Pool(processes=num_procs)
-        steps = np.round(np.linspace(istart, iend, num_procs)).astype(int)
+        steps = np.round(np.linspace(istart, iend, num_procs+1)).astype(int)
         args = [(steps[i-1], steps[i]-1) for i in range(1,len(steps))]
         stats = pool.map(self._get_financials_by_chunk, args)
         return
