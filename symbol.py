@@ -142,8 +142,8 @@ class Symbol:
             browser=webdriver.Chrome()
             close_browser = True
         # set timeout
-        browser.set_page_load_timeout(60)
-        browser.set_script_timeout(45)
+        browser.set_page_load_timeout(75)
+        browser.set_script_timeout(60)
 
         # Income Statement
         try:
@@ -154,7 +154,7 @@ class Symbol:
             try:
                 browser.get(site)
             except:
-                print("Error: failed to get link: %s." %site)
+                print("Error: %s: failed to get link: %s." %(self.sym, site))
                 if close_browser:
                     browser.close()
                 return
