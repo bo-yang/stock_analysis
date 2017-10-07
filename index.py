@@ -11,7 +11,7 @@ class Index(object):
         self.datapath = os.path.normpath(datapath + '/' + name)
         self.datafile = self.datapath + '/components.csv'
         self.components = components # index 'Symbol'
-        self.value_attrib = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin', 'PriceIn52weekRange']
+        self.value_attribs = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin', 'PriceIn52weekRange']
         if loaddata:
             self.sym.get_quotes()
             self.load_data(from_file=True)
@@ -147,7 +147,7 @@ class Index(object):
         browser.close()
         return
 
-    def get_financials(self, update_list=True, sym_start=str(), sym_end=str(), num_procs=8):
+    def get_financials(self, update_list=True, sym_start=str(), sym_end=str(), num_procs=10):
         """
         Download financial data for stocks.
 
@@ -204,7 +204,7 @@ class Index(object):
         """
         return self._get_tickers_of_sector_industry('Industry', industry)
 
-    def _get_sector_industry_top(self, secind, siname='', columns=[], percent=0.2):
+    def _get_sector_industry_top(self, secind=str(), siname='', columns=[], percent=0.2):
         """
         Get the top performers of each sector/industry.
 
@@ -217,9 +217,12 @@ class Index(object):
             self.get_stats()
 
         if len(columns) == 0:
-            columns = self.value_attrib
+            columns = self.value_attribs
 
-        symbols = self._get_tickers_of_sector_industry(secind, siname)
+        if len(secind) > 0 and len(siname) > 0:
+            symbols = self._get_tickers_of_sector_industry(secind, siname)
+        else:
+            symbols = self.components
         if symbols.empty:
             return DataFrame()
 
@@ -328,7 +331,7 @@ class Index(object):
         key: keyword, e.g. 'P/E', 'Price/Book', 'Price/Sales'
         """
         if len(key) == 0:
-            key = self.value_attrib
+            key = self.value_attribs
         tags = [secind] + key
         lines = []
         if len(item) > 0:
@@ -364,8 +367,8 @@ class Index(object):
 
         e.g.
             nasdaq.get_industry_median(['P/E', 'Price/Book', 'Price/Sales'])
-            value_attrib = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
-            nasdaq.get_industry_median(value_attrib, item='RETAIL: Building Materials')
+            value_attribs = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+            nasdaq.get_industry_median(value_attribs, item='RETAIL: Building Materials')
         """
         return self._get_sector_industry_median('Industry', columns, industry)
 
@@ -382,7 +385,7 @@ class Index(object):
             print('Error: a list of tickers is expected.')
             return
         if len(columns) == 0:
-            columns = self.value_attrib
+            columns = self.value_attribs
 
         tags = ['Items'] + columns
         if how == 'top':

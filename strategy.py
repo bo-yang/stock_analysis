@@ -13,9 +13,9 @@ blacklist = ['WINS', 'ENIC', 'LEXEB', 'LAUR', 'BGCA', 'AEK', 'MBT', 'VIP', 'BMA'
         'CPA', 'CEA', 'VALE', 'MFG', 'TKC', 'ZNH', 'GATX', 'AGNCP', 'BFR', 'KEP', 'YIN', 'GMLP', 'YRD', 'SHI', 'PAM',
         'OEC', 'NORD', 'TAL', 'EDU', 'MELI', 'GLOB', 'SINA', 'BEDU']
 
-def value_analysis(index):
+def _fitler_value_equities(index, drop_low_pe_sectors=False):
     """
-    Value analysis for the given Index.
+    Filter out stocks that do not meet value analysis requirements.
     """
     if not issubclass(type(index), Index):
         print('Error: only Index type is supported.')
@@ -40,7 +40,10 @@ def value_analysis(index):
     # Drop smaller financial/utitlity/transportation companies
     sectors = ['Finance', 'Public Utilities', 'Transportation', 'Energy']
     for sec in sectors:
-        rule = [('Sector', '==', sec), ('MarketCap', '<', 8)]
+        if drop_low_pe_sectors:
+            rule = [('Sector', '==', sec)]
+        else:
+            rule = [('Sector', '==', sec), ('MarketCap', '<', 8)]
         small_companies = index.filter_by_compare(rule)
         stocks_value.drop(small_companies.index, inplace=True, errors='ignore')
 
@@ -51,6 +54,15 @@ def value_analysis(index):
         to_be_dropped = index.filter_by_compare(rule)
         stocks_value.drop(to_be_dropped.index, inplace=True, errors='ignore')
 
+    return stocks_value
+
+def value_analysis(index):
+    """
+    Value analysis for the given Index.
+    """
+    stocks_value = _fitler_value_equities(index)
+    if stocks_value.empty:
+        return stocks_value
     # Ranking stocks
     stock_rank = ranking(stocks_value, tags=rank_tags_value, rank='sort')
     stock_rank = stock_rank.join(index.components.loc[stock_rank.index][['LastWeekReturn', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'YearlyRelativeGrowth', 'PriceIn52weekRange', 'Sector', 'Industry']])
@@ -58,6 +70,22 @@ def value_analysis(index):
     stock_rank.to_csv(saveto)
     #print(stock_rank.to_string())
     return stock_rank
+
+def value_ranking(index):
+    """
+    Value analysis for the given Index.
+    """
+    stocks_value = _fitler_value_equities(index, drop_low_pe_sectors=True)
+    if stocks_value.empty:
+        return stocks_value
+    # get top scored stocks
+    value_attribs = ['P/E', 'Price/Book', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+    # TODO: create a temp index based on stocks_value
+    stocks_top = index._get_sector_industry_top(columns=value_attribs, percent=0.2)
+    stocks = stocks_top.loc[stocks_value.index].dropna(how='all')
+    add_attribs = index.components.loc[stocks_value.index][['MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'PriceIn52weekRange', 'Sector']]
+    stocks = stocks.join(add_attribs).sort_values('Score', ascending=False)
+    return stocks
 
 def efficiency_level(stocks, saveto=None):
     """
