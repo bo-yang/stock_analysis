@@ -147,7 +147,7 @@ class Index(object):
         browser.close()
         return
 
-    def get_financials(self, update_list=True, sym_start=str(), sym_end=str(), num_procs=10):
+    def get_financials(self, update_list=True, sym_start=str(), sym_end=str(), num_procs=9):
         """
         Download financial data for stocks.
 

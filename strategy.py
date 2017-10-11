@@ -38,8 +38,10 @@ def _fitler_value_equities(index, drop_low_pe_sectors=False):
     stocks_value.drop(blacklist, inplace=True, errors='ignore')
 
     # Drop smaller financial/utitlity/transportation companies
-    sectors = ['Finance', 'Public Utilities', 'Transportation', 'Energy']
+    sectors = ['Finance', 'financials', 'Public Utilities', 'Transportation', 'Energy']
     for sec in sectors:
+        if sec not in index.components['Sector'].unique():
+            continue
         if drop_low_pe_sectors:
             rule = [('Sector', '==', sec)]
         else:
