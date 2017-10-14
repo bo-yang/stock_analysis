@@ -73,9 +73,12 @@ def value_analysis(index):
     #print(stock_rank.to_string())
     return stock_rank
 
-def value_ranking(index):
+def value_ranking(index, percent=0.2):
     """
     Value analysis for the given Index.
+
+    index: stock exchange index.
+    percent: percentage of top valued stocks in the given Index.
     """
     stocks_value = _fitler_value_equities(index, drop_low_pe_sectors=True)
     if stocks_value.empty:
@@ -83,7 +86,7 @@ def value_ranking(index):
     # get top scored stocks
     value_attribs = ['P/E', 'Price/Book', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
     # TODO: create a temp index based on stocks_value
-    stocks_top = index._get_sector_industry_top(columns=value_attribs, percent=0.2)
+    stocks_top = index._get_sector_industry_top(columns=value_attribs, percent=percent)
     stocks = stocks_top.loc[stocks_value.index].dropna(how='all')
     add_attribs = index.components.loc[stocks_value.index][['MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'PriceIn52weekRange', 'Sector']]
     stocks = stocks.join(add_attribs).sort_values('Score', ascending=False)
@@ -127,7 +130,7 @@ def check_relative_growth(sym, index=NASDAQ()):
     stat = index.components.loc[sym]
     return stat.loc[['RelativeGrowthLastWeek', 'RelativeGrowthLastMonth', 'RelativeGrowthLastQuarter', 'RelativeGrowthHalfYear', 'RelativeGrowthLastYear', 'RelativeGrowthLast2Years', 'RelativeGrowthLast3Years', 'WeeklyRelativeGrowth', 'MonthlyRelativeGrowth', 'QuarterlyRelativeGrowth', 'YearlyRelativeGrowth']]
 
-def grow_and_value(index, ref_index=NASDAQ(), dropna=True, saveto=None):
+def fast_grow_stocks(index, ref_index=NASDAQ(), dropna=True, saveto=None):
     """
     Filter out fast growing stocks with value analysis. This strategy picks
     1. Stocks that have solid fundamentals and outperform their respective industries or benchmarks.
@@ -160,6 +163,15 @@ def grow_and_value(index, ref_index=NASDAQ(), dropna=True, saveto=None):
         index_value_grow.to_csv(saveto)
 
     return index_value_grow
+
+def grow_and_value(index):
+    """
+    Find value stocks that are also fast growing.
+    """
+    stocks_value = value_ranking(index, percent=0.3)
+    stocks_grow = fast_grow_stocks(index)
+    stocks = stocks_grow.loc[stocks_value.index].dropna(how='all')
+    return stocks.sort_values('MonthlyRelativeGrowth', ascending=False)
 
 def trend_change(index, speedup=True):
     """
