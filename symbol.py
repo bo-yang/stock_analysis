@@ -156,7 +156,7 @@ class Symbol:
             except:
                 print("Error: %s: failed to get link: %s." %(self.sym, site))
                 if close_browser:
-                    browser.close()
+                    browser.quit()
                 return
 
         try:
@@ -164,7 +164,7 @@ class Symbol:
         except:
             print('Error: timeout when finding \'fs-table\' for %s, exchange %s' %(self.sym, exchange))
             if close_browser:
-                browser.close()
+                browser.quit()
             return
 
         if len(tables) < 1:
@@ -176,13 +176,13 @@ class Symbol:
             except:
                 print("Error: Financials link not found for %s, exchange %s" %(self.sym, exchange))
                 if close_browser:
-                    browser.close()
+                    browser.quit()
                 return
 
         if len(tables) < 1:
             print('Error: %s: failed to find income statement, exchange %s.' %(self.sym, exchange))
             if close_browser:
-                browser.close()
+                browser.quit()
             return
         else:
             self.income = parse_google_financial_table(tables, 'Revenue')
@@ -195,7 +195,7 @@ class Symbol:
         if len(tables) < 1:
             print('Error: %s: failed to find balance sheet.' %self.sym)
             if close_browser:
-                browser.close()
+                browser.quit()
             return
         else:
             self.balance = parse_google_financial_table(tables, 'Total Assets')
@@ -207,13 +207,13 @@ class Symbol:
         if len(tables) < 1:
             print('Error: %s: failed to find cash flow.' %self.sym)
             if close_browser:
-                browser.close()
+                browser.quit()
             return
         else:
             self.cashflow = parse_google_financial_table(tables, 'Amortization')
 
         if close_browser:
-            browser.close()
+            browser.quit()
         return
 
     def get_edgar_report(self):

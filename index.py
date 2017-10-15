@@ -144,7 +144,7 @@ class Index(object):
                     stock.exch = exch
             stock.get_financials(browser=browser)
             stock.save_financial_data()
-        browser.close()
+        browser.quit()
         return
 
     def get_financials(self, update_list=True, sym_start=str(), sym_end=str(), num_procs=9):
