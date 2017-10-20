@@ -11,7 +11,7 @@ class Index(object):
         self.datapath = os.path.normpath(datapath + '/' + name)
         self.datafile = self.datapath + '/components.csv'
         self.components = components # index 'Symbol'
-        self.value_attribs = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin', 'PriceIn52weekRange']
+        self.value_attribs = ['P/E', 'Price/Book', 'Price/Sales', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin', 'DividendYield', 'PriceIn52weekRange']
         if loaddata:
             self.sym.get_quotes()
             self.load_data(from_file=True)

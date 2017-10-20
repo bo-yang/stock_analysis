@@ -84,7 +84,7 @@ def value_ranking(index, percent=0.2):
     if stocks_value.empty:
         return stocks_value
     # get top scored stocks
-    value_attribs = ['P/E', 'Price/Book', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin']
+    value_attribs = ['P/E', 'Price/Book', 'Debt/Assets', 'ReturnOnCapital', 'ReceivablesTurnover', 'InventoryTurnover', 'AssetUtilization', 'OperatingProfitMargin', 'DividendYield']
     # TODO: create a temp index based on stocks_value
     stocks_top = index._get_sector_industry_top(columns=value_attribs, percent=percent)
     stocks = stocks_top.loc[stocks_value.index].dropna(how='all')
