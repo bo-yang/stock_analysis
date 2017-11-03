@@ -197,7 +197,7 @@ def get_symbol_names(symbols):
     symnames = symnames.set_index('Symbol')
     return symnames
 
-def get_symbol_yahoo_stats_url(symbols):
+def get_symbol_yahoo_stats_url(symbols, exclude_name=False):
     """
     Get the symbols' basic statistics from Yahoo Finance.
     Input:
@@ -218,10 +218,14 @@ def get_symbol_yahoo_stats_url(symbols):
 
     # Yahoo Finance tags, refer to http://www.financialwisdomforum.org/gummy-stuff/Yahoo-data.htm
     # More tags: https://github.com/herval/yahoo-finance/blob/master/lib/yahoo-finance.rb
-    tags = {'s':'Symbol', 'x':'Exchange', 'j1':'Market Cap', 'b4':'Book Value', 'r':'P/E', 'p5':'Price/Sales',
-            'p6':'Price/Book', 'j4':'EBITDA', 'j':'52-week Low', 'k':'52-week High', 'l1':'Last Trade',
-            'd':'Dividend/Share', 'y':'Dividend Yield', 'e':'EPS', 's7':'Short Ratio', 's1':'Shares Owned',
-            'f6':'Float Shares'}
+    tags = {'s':'Symbol', 'j1':'MarketCap', 'v':'Volume', 'a2':'AverageDailyVolume', 'b4':'BookValuePerShare',
+            'r':'P/E', 'r5':'PEG', 'p5':'Price/Sales', 'p6':'Price/Book', 'j4':'EBITDA', 'e':'EPS', 'e9':'EPSEstimateNextQuarter',
+            'e7':'EPSEstimateCurrentYear', 'e8':'EPSEstimateNextYear', 't8':'OneyrTargetPrice', 'r6':'PriceEPSEstimateCurrentYear',
+            'r7':'PriceEPSEstimateNextYear', 's7':'ShortRatio', 'd':'Dividend/Share', 'y':'DividendYield', 'r1':'DividendPayDate',
+            'q':'ExDividendDate', 'm3':'MovingAvg50Day', 'm4':'MovingAvg200Day', 'b4':'BookValue'} # 'x':'Exchange'
+    if not exclude_name:
+        tags.update({'n':'Name'})
+
     url_str += '&f=' + ''.join(pd.compat.iterkeys(tags))
     with urlopen(url_str) as resp:
         raw = resp.read()
@@ -299,6 +303,7 @@ def get_symbol_yahoo_stats_yql(symbols, exclude_name=False):
     return stats
 
 def get_symbol_yahoo_stats(symbols, exclude_name=False):
+    #return get_symbol_yahoo_stats_url(symbols, exclude_name)
     return get_symbol_yahoo_stats_yql(symbols, exclude_name)
 
 def get_symbol_exchange(sym):
