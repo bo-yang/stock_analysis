@@ -7,6 +7,7 @@ import datetime as dt
 import time
 import operator
 import random
+import requests
 
 from pandas import DataFrame
 from pandas.tseries.offsets import BDay # business days
@@ -481,4 +482,8 @@ def plot_candlestick(dat, stick = "day", otherseries = None):
     plt.setp(plt.gca().get_xticklabels(), rotation=45, horizontalalignment='right')
     plt.show()
 
-
+def get_cik(ticker):
+    URL = 'http://www.sec.gov/cgi-bin/browse-edgar?CIK={}&Find=Search&owner=exclude&action=getcompany'
+    CIK_RE = re.compile(r'.*CIK=(\d{10}).*')
+    results = CIK_RE.findall(str(requests.get(URL.format(ticker)).content))
+    return results
