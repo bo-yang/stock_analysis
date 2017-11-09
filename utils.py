@@ -20,6 +20,8 @@ from pandas_datareader._utils import RemoteDataError
 
 from bs4 import BeautifulSoup
 
+import subprocess
+import threading
 import multiprocessing as mp
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -27,6 +29,38 @@ from yahoo_finance import Share
 
 # matplotlib
 import matplotlib.pyplot as plt
+
+class Command(object):
+    """ Run system commands with timeout
+    """
+    def __init__(self, cmd, capture=False, timeout=120):
+        self.cmd = cmd
+        self.process = None
+        self.out = None
+
+    def run_command(self, capture=False):
+        if not capture:
+            self.process = subprocess.Popen(self.cmd,shell=True)
+            self.process.communicate()
+            return
+        # capturing the outputs of shell commands
+        self.process = subprocess.Popen(self.cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,stdin=subprocess.PIPE)
+        out,err = self.process.communicate()
+        if len(out) > 0:
+            self.out = out.splitlines()
+        else:
+            self.out = None
+
+    # set default timeout to 2 minutes
+    def run(self, capture=False, timeout=120):
+        thread = threading.Thread(target=self.run_command, args=(capture,))
+        thread.start()
+        thread.join(timeout)
+        if thread.is_alive():
+            print('Command timeout, kill it: ' + self.cmd)
+            self.process.terminate()
+            thread.join()
+        return self.out
 
 # Exchange symbols:
 #   NMS = NasdaqGS; NGM = NasdagGM; NCM = NasdaqCM; ASE = AMEX; NYQ = NYSE;
@@ -482,8 +516,49 @@ def plot_candlestick(dat, stick = "day", otherseries = None):
     plt.setp(plt.gca().get_xticklabels(), rotation=45, horizontalalignment='right')
     plt.show()
 
-def get_cik(ticker):
-    URL = 'http://www.sec.gov/cgi-bin/browse-edgar?CIK={}&Find=Search&owner=exclude&action=getcompany'
-    CIK_RE = re.compile(r'.*CIK=(\d{10}).*')
-    results = CIK_RE.findall(str(requests.get(URL.format(ticker)).content))
-    return results
+TICKER_CIK_MAP = DataFrame()
+def lookup_cik(ticker):
+    global TICKER_CIK_MAP
+    if TICKER_CIK_MAP.empty:
+        TICKER_CIK_MAP = load_cik_ticker()
+    if ticker in TICKER_CIK_MAP.index:
+        return str(TICKER_CIK_MAP['CIK'].loc[ticker])
+    else:
+        return lookup_cik_from_sec(ticker)
+
+def lookup_cik_from_sec(ticker=str(), name=str()):
+    """
+    Find CIK for the given stock symbol or company name.
+    Return a string of CIK.
+
+    ticker: stock symbol
+    name: company name
+    """
+    if len(ticker) > 0: 
+        url = 'http://www.sec.gov/cgi-bin/browse-edgar?CIK={}&Find=Search&owner=exclude&action=getcompany'
+        cik_re = re.compile(r'.*CIK=([0-9]+).*')
+        r = requests.get(url.format(ticker))
+        results = cik_re.findall(str(r.content))
+        if len(results) > 0:
+            if len(results) > 1:
+                print('Warning: multiple CIKs found for ticker %s' %ticker)
+            return str(int(results[0]))
+        else:
+            print('Error: failed to get CIK for ticker %s' %ticker)
+    if len(name) > 0:
+        for chars in range(len(name), 1, -2): # remove chars from the end
+            bracket_pattern = re.compile(r'[<>\(\[\)\]\|]')
+            amper_pattern = re.compile(r'&')
+            query = bracket_pattern.sub('', name[0:chars]) # company name under query, remove special symbols
+            #print('query name "%s"' %query) # FIXME: TEST ONLY
+            url = 'https://www.sec.gov/cgi-bin/cik_lookup?company={}'
+            cik_re = re.compile(r'.*CIK=([0-9]+).*%s'%amper_pattern.sub('&amp;',query.upper()))
+            r = requests.get(url.format(query))
+            results = cik_re.findall(str(r.content))
+            if results != None and len(results) > 0:
+                if len(results) > 1:
+                    print('Warning: multiple CIKs found for name %s' %query)
+                return str(int(results[0]))
+        print('Error: failed to get CIK for "%s"' %name)
+    return str()
+

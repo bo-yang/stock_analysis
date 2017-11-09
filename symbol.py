@@ -42,10 +42,12 @@ class Symbol:
     Class of a stock symbol.
     """
     def __init__(self, sym, name=None, start=DEFAULT_START_DATE, end=None, datapath='./data', loaddata=True):
-        self.sym = sym # e.g. 'AAPL'
+        self.sym = sym # ticker symbol, e.g. 'AAPL'
+        self.cik = str() # CIK
         self.exch = None # stock exchange symbol, e.g. NMS, NYQ
         self.quotes = DataFrame()
         self.stats = DataFrame()
+        self.edgar = DataFrame()
         self.income = DataFrame()  # Income Statement
         self.balance = DataFrame() # Balance Sheet
         self.cashflow = DataFrame() # Cash Flow
@@ -54,6 +56,7 @@ class Symbol:
             self.datapath = os.path.normpath(datapath+'/'+name)
         else:
             self.datapath = os.path.normpath(datapath+'/'+sym)
+        self.edgarpath = os.path.normpath(self.datapath+'/edgar')
         self.files = {'quotes':self.datapath + '/quotes.csv',
                       'stats':self.datapath + '/stats.csv',
                       'income':self.datapath + '/income.csv',
@@ -216,10 +219,51 @@ class Symbol:
             browser.quit()
         return
 
-    def get_edgar_report(self):
+    def get_sec_report(self, form='10-Q', download=False, year_range=3):
         """
-        EDGAR stock report: http://www.nasdaq.com/symbol/nvda
+        Get SEC EDGAR earnings report.
         """
+        if len(self.cik) <= 0:
+            self.cik = get_cik(self.sym)
+        if len(self.cik) <= 0:
+            print('%s: cannot find CIK.' %self.sym)
+            return
+
+        form_path = self.edgarpath+'/'+form
+        if download: # create dir
+            if not os.path.isdir(form_path):
+                os.mkdir(form_path)
+
+        # TODO: move it to index.py
+        all_edgar_links = []
+        sec_archive_base = 'https://www.sec.gov/Archives'
+        xbrl_idx_base = sec_archive_base + '/edgar/full-index'
+        year_end = dt.datetime.today().year
+        year_start = year_end - year_range
+        for year in range(year_start, year_end+1):
+            for quarter in ['QTR1', 'QTR2', 'QTR3', 'QTR4']:
+                xbrl_idx = '%s/%s/%s/xbrl.idx' %(xbrl_idx_base, year, quarter)
+                r = requests.get(xbrl_idx)
+                if r.status_code != requests.codes.ok:
+                    print('Error: requests get failure, url %s, status_code %d' %(xbrl_idx, r.status_code))
+                    continue
+                # Parse each line and extract lines with specified form(e.g.10-Q).
+                #
+                # Example:
+                # CIK|Company Name|Form Type|Date Filed|Filename
+                # 1173313|American BriVision (Holding) Corp|10-K/A|2017-09-22|edgar/data/1173313/0001213900-17-009907.txt
+                # 1173313|American BriVision (Holding) Corp|10-Q|2017-08-21|edgar/data/1173313/0001213900-17-009012.txt
+                # 1173313|American BriVision (Holding) Corp|S-1/A|2017-07-17|edgar/data/1173313/0001213900-17-007661.txt
+                # 1173313|American BriVision (Holding) Corp|S-1/A|2017-09-22|edgar/data/1173313/0001213900-17-009909.txt
+                # 1173431|TD AMERITRADE HOLDING CORP|10-Q|2017-07-24|edgar/data/1173431/0001173431-17-000108.txt
+                # 1173431|TD AMERITRADE HOLDING CORP|8-K|2017-07-18|edgar/data/1173431/0001173431-17-000104.txt
+                pattern = '([0-9]+)\|(.*)\|%s\|(.*)\|(.*)'%form
+                for line in r.content.splitlines():
+                    m = re.match(pattern, str(line))
+                    if m:
+                        all_edgar_links.append(m.groups())
+
+
         # TODO: download the data
         return
 

@@ -584,6 +584,38 @@ class Index(object):
             self.components.to_csv(self.datafile)
         return
 
+    def update_ciks(self, updateall=False):
+        """
+        Load CIK-Ticker from file cik_ticker.csv, which is downloaded from http://rankandfiled.com/#/data/tickers.
+        Return a Pandas Series.
+        Header:
+            CIK|Ticker|Name|Exchange|SIC|Business|Incorporated|IRS
+        """
+        saveto = os.path.normpath(self.datapath + '/cik_ticker.csv')
+        ciks = pd.Series()
+        if not updateall:
+            if os.path.isfile(saveto):
+                ciks = ciks.from_csv(saveto)
+            else:
+                cik_ticker_file = 'data/cik_ticker_rankandfiled.csv'
+                if os.path.isfile(cik_ticker_file):
+                    cikdf = DataFrame()
+                    cikdf = cikdf.from_csv(cik_ticker_file, sep='|')
+                    cikdf = cikdf.reset_index().set_index('Ticker')
+                    ciks = cikdf['CIK']
+        # Query for symbols that are not in ciks
+        symbols = self.components.index.difference(ciks.index)
+        cikdict = dict()
+        for sym in symbols:
+            cikdict[sym] = lookup_cik_from_sec(ticker=sym, name=self.components['Name'].loc[sym])
+        if len(cikdict) > 0:
+            ciks = ciks.append(pd.Series(cikdict))
+        ciks.rename('CIK', inplace=True)
+        ciks.index.rename('Symbol', inplace=True)
+        ciks = ciks.fillna(0.0).astype(int).astype(str) # remove '.0's
+        ciks.to_csv(saveto)
+        return ciks.loc[self.components.index]
+
 def get_index_components_from_wiki(link, params):
     """
     Download S&P index components.
@@ -640,6 +672,9 @@ class SP500(Index):
         link = "http://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
         params={'Symbol':0, 'Name':1, 'Sector':3, 'Industry':4}
         self.components = get_index_components_from_wiki(link, params)
+        # insert CIK
+        ciks = self.update_ciks(updateall=False)
+        self.components = self.components.join(ciks)
         return self.components
 
 class SP400(Index):
@@ -657,6 +692,9 @@ class SP400(Index):
         link = "http://en.wikipedia.org/wiki/List_of_S%26P_400_companies"
         params={'Symbol':0, 'Name':1, 'Sector':2, 'Industry':3}
         self.components = get_index_components_from_wiki(link, params)
+        # insert CIK
+        ciks = self.update_ciks(updateall=False)
+        self.components = self.components.join(ciks)
         return self.components
 
 
@@ -674,6 +712,9 @@ class DJIA(Index):
         link = 'https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average'
         params={'Symbol':2, 'Name':0, 'Sector':3, 'Industry':3}
         self.components = get_index_components_from_wiki(link, params)
+        # insert CIK
+        ciks = self.update_ciks(updateall=False)
+        self.components = self.components.join(ciks)
         return self.components
 
 class NASDAQ100(Index):
@@ -749,6 +790,9 @@ class NASDAQ(Index):
         self.components = self.components.join(sector)
         self.components = self.components.join(industry)
 
+        # insert CIK
+        ciks = self.update_ciks(updateall=False) # update_list
+        self.components = self.components.join(ciks)
         self.components.sort_index(inplace=True) # sort symbols alphabetically
 
         self.components.to_csv(companylist)
