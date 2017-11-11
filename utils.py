@@ -516,8 +516,8 @@ def plot_candlestick(dat, stick = "day", otherseries = None):
     plt.setp(plt.gca().get_xticklabels(), rotation=45, horizontalalignment='right')
     plt.show()
 
-TICKER_CIK_MAP = DataFrame()
 def lookup_cik(ticker):
+    # TODO: query from NASDAQ
     global TICKER_CIK_MAP
     if TICKER_CIK_MAP.empty:
         TICKER_CIK_MAP = load_cik_ticker()
@@ -538,7 +538,7 @@ def lookup_cik_from_sec(ticker=str(), name=str()):
         url = 'http://www.sec.gov/cgi-bin/browse-edgar?CIK={}&Find=Search&owner=exclude&action=getcompany'
         cik_re = re.compile(r'.*CIK=([0-9]+).*')
         r = requests.get(url.format(ticker))
-        results = cik_re.findall(str(r.content))
+        results = cik_re.findall(r.text)
         if len(results) > 0:
             if len(results) > 1:
                 print('Warning: multiple CIKs found for ticker %s' %ticker)
@@ -553,8 +553,8 @@ def lookup_cik_from_sec(ticker=str(), name=str()):
             #print('query name "%s"' %query) # FIXME: TEST ONLY
             url = 'https://www.sec.gov/cgi-bin/cik_lookup?company={}'
             cik_re = re.compile(r'.*CIK=([0-9]+).*%s'%amper_pattern.sub('&amp;',query.upper()))
-            r = requests.get(url.format(query))
-            results = cik_re.findall(str(r.content))
+            r = requests.get(url.format(query)) # or r = requests.post(url, data={'company':query})
+            results = cik_re.findall(r.text)
             if results != None and len(results) > 0:
                 if len(results) > 1:
                     print('Warning: multiple CIKs found for name %s' %query)

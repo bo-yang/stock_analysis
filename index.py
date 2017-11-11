@@ -616,6 +616,80 @@ class Index(object):
         ciks.to_csv(saveto)
         return ciks.loc[self.components.index]
 
+    def download_earning_reports(self, form='10-Q', year_range=3, force_update=False):
+        """
+        Find the EDGAR XBRL format earning reports(10-Q) from SEC.
+        E.g. https://www.sec.gov/Archives/edgar/data/1649338/000164933817000107/avgo-20170730.xml
+        """
+        if self.components.empty:
+            self.get_compo_list()
+
+        cik_series = self.components['CIK'].astype(str)
+        cik_to_ticker = pd.Series(cik_series.index.values, index=cik_series).to_dict()
+
+        sec_archive_base = 'https://www.sec.gov/Archives'
+        xbrl_idx_base = sec_archive_base + '/edgar/full-index'
+        xbrl_pattern = re.compile(r'([0-9]+)\|(.*)\|%s\|(.*)\|(.*)'%form)
+        link_pattern = re.compile(r'[-\.txt]')
+        #instance_pattern = re.compile(r'instance=[\'\"]*([\w\-]+\.xml)[\'\"]*') # e.g. <Report instance="amtd-20170630.xml">
+        instance_pattern = re.compile(r'>([\w]+-[0-9]+\.xml)<') # e.g. <File>bebe-20140104.xml</File>
+        year_end = dt.datetime.today().year
+        year_start = year_end - year_range
+        for year in range(year_start, year_end+1):
+            for quarter in ['QTR1', 'QTR2', 'QTR3', 'QTR4']:
+                xbrl_idx = '%s/%s/%s/xbrl.idx' %(xbrl_idx_base, year, quarter)
+                try:
+                    r = requests.get(xbrl_idx)
+                except requests.exceptions.RequestException as e:
+                    print('Error: xbrl.idx request exception, link %s' %xbrl_idx)
+                    print(e)
+                    continue
+                if r.status_code != requests.codes.ok:
+                    print('Error: requests get failure, url %s, status_code %d' %(xbrl_idx, r.status_code))
+                    continue
+                # Parse each line and extract lines with specified form(e.g.10-Q).
+                #
+                # Example:
+                # CIK|Company Name|Form Type|Date Filed|Filename
+                # 1173313|American BriVision (Holding) Corp|10-K/A|2017-09-22|edgar/data/1173313/0001213900-17-009907.txt
+                # 1173313|American BriVision (Holding) Corp|10-Q|2017-08-21|edgar/data/1173313/0001213900-17-009012.txt
+                # 1173313|American BriVision (Holding) Corp|S-1/A|2017-07-17|edgar/data/1173313/0001213900-17-007661.txt
+                # 1173313|American BriVision (Holding) Corp|S-1/A|2017-09-22|edgar/data/1173313/0001213900-17-009909.txt
+                # 1173431|TD AMERITRADE HOLDING CORP|10-Q|2017-07-24|edgar/data/1173431/0001173431-17-000108.txt
+                # 1173431|TD AMERITRADE HOLDING CORP|8-K|2017-07-18|edgar/data/1173431/0001173431-17-000104.txt
+                all_edgar_links = dict() # CIK-to-link dict
+                for line in r.text.splitlines():
+                    m = xbrl_pattern.findall(line)
+                    if len(m) > 0:
+                        all_edgar_links[m[0][0]] = m[0][-1]
+                # Download links
+                for cik in all_edgar_links.keys():
+                    if cik not in cik_to_ticker.keys():
+                        #print('Skip CIK ' + cik) # FIXME: TEST ONLY
+                        continue
+                    link = all_edgar_links[cik] # e.g. 'edgar/data/1173431/0001173431-17-000108.txt'
+                    link=link.split('/') # e.g. ['edgar', 'data', '1173431', '0001173431-17-000108.txt']
+                    link[-1] = link_pattern.sub('', link[-1]) # e.g. '000117343117000108'
+                    link = '/'.join(link) # e.g. 'edgar/data/1173431/000117343117000108'
+                    url = sec_archive_base+'/'+link+'/FilingSummary.xml'
+                    try:
+                        r = requests.get(url)
+                    except requests.exceptions.RequestException as e:
+                        print('%s: FilingSummary request failure, link %s' %(cik_to_ticker[cik], url))
+                        print(e)
+                        continue
+                    m = instance_pattern.search(r.text)
+                    if m and len(m.groups()) > 0:
+                        xbrl_file = m.groups()[0]
+                        print('%s => %s => %s' %(cik_to_ticker[cik], cik, xbrl_file)) # FIXME: TEST ONLY
+                        # download file url = sec_archive_base+'/'+link+'/'+xbrl_file
+                        ticker = Symbol(cik_to_ticker[cik])
+                        ticker.download_earning(sec_archive_base+'/'+link, xbrl_file, form, force_update=force_update)
+                    else:
+                        print('Error: failed to find XBRL file for %s, url %s, status_code %d' %(cik_to_ticker[cik], url, r.status_code))
+                        continue
+
+
 def get_index_components_from_wiki(link, params):
     """
     Download S&P index components.
