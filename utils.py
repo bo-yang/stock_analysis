@@ -13,6 +13,8 @@ from pandas import DataFrame
 from pandas.tseries.offsets import BDay # business days
 from pandas.io.common import urlopen
 
+from stock_analysis.xbrl import XBRL
+
 #conda install -c https://conda.anaconda.org/anaconda pandas-datareader
 import pandas_datareader.data as web
 import pandas_datareader as pdr
@@ -555,9 +557,9 @@ def lookup_cik_from_sec(ticker=str(), name=str()):
 def extract_earnings_from_xbrl(xbrlfile):
     """
     Parse earning reports from XBRL file.
-    Return a Pandas DataFrame:
+    Return a Pandas Series:
         index - extracted earning data
         column - earning filing dates
     """
-    pass
-
+    earning = XBRL(xbrlfile).fields
+    return pd.Series(earning, name=earning['BalanceSheetDate'])
