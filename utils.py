@@ -516,16 +516,6 @@ def plot_candlestick(dat, stick = "day", otherseries = None):
     plt.setp(plt.gca().get_xticklabels(), rotation=45, horizontalalignment='right')
     plt.show()
 
-def lookup_cik(ticker):
-    # TODO: query from NASDAQ
-    global TICKER_CIK_MAP
-    if TICKER_CIK_MAP.empty:
-        TICKER_CIK_MAP = load_cik_ticker()
-    if ticker in TICKER_CIK_MAP.index:
-        return str(TICKER_CIK_MAP['CIK'].loc[ticker])
-    else:
-        return lookup_cik_from_sec(ticker)
-
 def lookup_cik_from_sec(ticker=str(), name=str()):
     """
     Find CIK for the given stock symbol or company name.
@@ -561,4 +551,13 @@ def lookup_cik_from_sec(ticker=str(), name=str()):
                 return str(int(results[0]))
         print('Error: failed to get CIK for "%s"' %name)
     return str()
+
+def extract_earnings_from_xbrl(xbrlfile):
+    """
+    Parse earning reports from XBRL file.
+    Return a Pandas DataFrame:
+        index - extracted earning data
+        column - earning filing dates
+    """
+    pass
 

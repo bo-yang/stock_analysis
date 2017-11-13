@@ -47,7 +47,7 @@ class Symbol:
         self.exch = None # stock exchange symbol, e.g. NMS, NYQ
         self.quotes = DataFrame()
         self.stats = DataFrame()
-        self.edgar = DataFrame()
+        self.earnings = DataFrame()
         self.income = DataFrame()  # Income Statement
         self.balance = DataFrame() # Balance Sheet
         self.cashflow = DataFrame() # Cash Flow
@@ -231,7 +231,6 @@ class Symbol:
         if force_update or not os.path.isfile(report):
             # download the data
             url = baseurl+'/'+fname
-            #TODO: catch expections
             try:
                 r = requests.get(url)
             except requests.exceptions.RequestException as e:
