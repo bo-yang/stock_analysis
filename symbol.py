@@ -248,8 +248,20 @@ class Symbol:
         """
         Load all earning reports from dir edgarpath/form/.
         """
-        pass
-
+        form_path = self.edgarpath+'/'+form
+        if not os.path.isdir(form_path):
+            print('Error: path %s not found' %form_path)
+            return DataFrame()
+        for form in os.listdir(form_path):
+            f = os.path.normpath(form_path+'/'+form)
+            earning = XBRL(f).fields
+            earning = DataFrame(list(earning.items()), columns=['Entries', earning['BalanceSheetDate']])
+            earning.set_index('Entries', inplace=True)
+            if self.earnings.empty:
+                self.earnings = earning
+            else:
+                self.earnings = self.earnings.join(earning)
+        return self.earnings
 
     def load_data(self, from_file=True):
         """
@@ -1135,6 +1147,9 @@ class Symbol:
         NOT IMPLEMENTED YET
         """
         # links: http://insidertrading.org/
-        # and http://openinsider.com/search?q=AMD
+        # Insider sale:
+        #   http://openinsider.com/screener?s=AMD&xs=1
+        # Insider purchase:
+        #   http://openinsider.com/screener?s=OPK&xp=1
         # TODO: download insider trade history
         return

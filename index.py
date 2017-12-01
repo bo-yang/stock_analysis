@@ -783,11 +783,13 @@ class DJIA(Index):
         """
         Company | Exchange | Symbol | Industry | Date Added  | Notes
         """
+        if not os.path.isdir(self.datapath):
+            os.makedirs(self.datapath)
         link = 'https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average'
         params={'Symbol':2, 'Name':0, 'Sector':3, 'Industry':3}
         self.components = get_index_components_from_wiki(link, params)
         # insert CIK
-        ciks = self.update_ciks(updateall=False)
+        ciks = self.update_ciks(updateall=True)
         self.components = self.components.join(ciks)
         return self.components
 
