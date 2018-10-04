@@ -319,8 +319,8 @@ class Index(object):
                     continue
                 lines.append([item] + stocks[key].mean().tolist())
         stats = DataFrame(lines, columns=tags)
-        stats = stats.drop_duplicates()
-        stats = stats.set_index(secind)
+        stats.drop_duplicates(inplace=True)
+        stats.set_index(secind, inplace=True)
         return stats
 
     def _get_sector_industry_median(self, secind, key=list(), item=str()):
@@ -346,8 +346,8 @@ class Index(object):
                     continue
                 lines.append([item] + stocks[key].median().tolist())
         stats = DataFrame(lines, columns=tags)
-        stats = stats.drop_duplicates()
-        stats = stats.set_index(secind)
+        stats.drop_duplicates(inplace=True)
+        stats.set_index(secind, inplace=True)
         return stats
 
     def get_sector_median(self, columns=list(), sector=str()):
@@ -411,8 +411,8 @@ class Index(object):
             for l in sidict[sec_ind]:
                 lines.append(l)
         stats = DataFrame(lines, columns=tags)
-        stats = stats.drop_duplicates()
-        stats = stats.set_index(tags[0])
+        stats.drop_duplicates(inplace=True)
+        stats.set_index(tags[0], inplace=True)
         print(stats.to_string())
         return
 
@@ -570,7 +570,7 @@ class Index(object):
             self.sym.load_data()
             if os.path.isfile(self.datafile):
                 self.components = pd.read_csv(self.datafile)
-                self.components = self.components.set_index('Symbol')
+                self.components.set_index('Symbol', inplace=True)
         else:
             self.sym.get_quotes()
             self.get_stats()
@@ -726,8 +726,8 @@ def get_index_components_from_wiki(link, params):
                 sub_industry = 'n/a'
             st.append([symbol, name, sector, sub_industry])
     components = DataFrame(st, columns=tags)
-    components = components.drop_duplicates()
-    components = components.set_index('Symbol')
+    components.drop_duplicates(inplace=True)
+    components.set_index('Symbol',inplace=True)
     return components
 
 class SP500(Index):

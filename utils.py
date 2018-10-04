@@ -20,6 +20,7 @@ import pandas_datareader.data as web
 import pandas_datareader as pdr
 from pandas_datareader._utils import RemoteDataError
 
+import yahoofinancials as yf
 from bs4 import BeautifulSoup
 
 import subprocess
@@ -27,7 +28,8 @@ import threading
 import multiprocessing as mp
 from multiprocessing.dummy import Pool as ThreadPool
 
-from yahoo_finance import Share
+# FIXME: replace it with yahoofinancials
+#from yahoo_finance import Share
 
 # matplotlib
 import matplotlib.pyplot as plt

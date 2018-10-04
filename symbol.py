@@ -33,8 +33,8 @@ def parse_google_financial_table(tables, keyword=None):
         rows.append([key] + values)
     colstr = ['Entries'] + quarters
     fin_df = DataFrame(rows, columns=colstr)
-    fin_df = fin_df.drop_duplicates()
-    fin_df = fin_df.set_index('Entries')
+    fin_df.drop_duplicates(inplace=True)
+    fin_df.set_index('Entries', inplace=True)
     return fin_df
 
 class Symbol:
@@ -120,6 +120,13 @@ class Symbol:
             self.quotes = self.quotes.where(m, np.nan).dropna(how='any').astype(float)
         self.start_date = to_date(self.quotes.first_valid_index()) # update start date
         return self.quotes
+
+    def get_realtime_quote(self):
+        """ Get current price
+            Return the current price of this symbol.
+        """
+        ticker = yf.YahooFinancials(self.sym)
+        return ticker.get_current_price()
 
     def get_financials(self, exchange=None, browser=None):
         """
@@ -270,11 +277,11 @@ class Symbol:
         if from_file:
             if os.path.isfile(self.files['quotes']):
                 self.quotes = pd.read_csv(self.files['quotes'])
-                self.quotes = self.quotes.set_index('Date')
+                self.quotes.set_index('Date', inplace=True)
 
             if os.path.isfile(self.files['stats']):
                 self.stats = pd.read_csv(self.files['stats'])
-                self.stats = self.stats.set_index('Symbol')
+                self.stats.set_index('Symbol', inplace=True)
         else:
             self.get_quotes()
             self.get_stats()
@@ -288,15 +295,15 @@ class Symbol:
         if from_file:
             if os.path.isfile(self.files['income']):
                 self.income = pd.read_csv(self.files['income'])
-                self.income = self.income.set_index('Entries')
+                self.income.set_index('Entries', inplace=True)
 
             if os.path.isfile(self.files['balance']):
                 self.balance = pd.read_csv(self.files['balance'])
-                self.balance = self.balance.set_index('Entries')
+                self.balance.set_index('Entries', inplace=True)
 
             if os.path.isfile(self.files['cashflow']):
                 self.cashflow = pd.read_csv(self.files['cashflow'])
-                self.cashflow = self.cashflow.set_index('Entries')
+                self.cashflow.set_index('Entries', inplace=True)
         else:
             self.get_financials()
 
@@ -441,8 +448,8 @@ class Symbol:
                three_year_return, monthly_ret_avg, monthly_ret_median, quart_ret_avg, quart_ret_median, yearly_ret_avg, yearly_ret_median,
                pos_in_range, last_quarter_growth, last_year_growth]]
         stats = DataFrame(st, columns=labels)
-        stats = stats.drop_duplicates()
-        stats = stats.set_index('Symbol')
+        stats.drop_duplicates(inplace=True)
+        stats.set_index('Symbol', inplace=True)
         return stats
 
     def sma(self, n=20, start=None, end=None):
@@ -582,8 +589,8 @@ class Symbol:
                   relative_growth_last_year, relative_growth_two_year, relative_growth_three_year, weekly_rel_growth, monthly_rel_growth,
                   quarterly_rel_growth, yearly_rel_growth]]
         stats_df = DataFrame(stats, columns=labels)
-        stats_df = stats_df.drop_duplicates()
-        stats_df = stats_df.set_index('Symbol')
+        stats_df.drop_duplicates(inplace=True)
+        stats_df.set_index('Symbol', inplace=True)
         return stats_df
 
     def trend_stats(self):
@@ -651,8 +658,8 @@ class Symbol:
 
         stats = [[self.sym, roc_stat, roc_trend_7d, roc_trend_14d, rsi_stat, macd_stat, fsto_stat, ssto_stat, avg_fsto_past_month, avg_fsto_past_quarter, volume_change]]
         stats_df = DataFrame(stats, columns=labels)
-        stats_df = stats_df.drop_duplicates()
-        stats_df = stats_df.set_index('Symbol')
+        stats_df.drop_duplicates(inplace=True)
+        stats_df.set_index('Symbol', inplace=True)
         return stats_df
 
     def financial_stats(self, exchange=None, browser=None, update=False):
@@ -731,8 +738,8 @@ class Symbol:
 
         stats = [[self.sym, revenue_momentum, profit_margins[-1], profit_margins.mean(), profit_margin_moment, operating_margins[-1], operating_margins.mean(), operate_margin_moment, asset_momentum, debt_to_assets[-1], debt_to_assets.mean(), debt_assets_moment, cash_operate_moment, cash_invest_moment, cash_finance_moment]]
         stats_df = DataFrame(stats, columns=labels)
-        stats_df = stats_df.drop_duplicates()
-        stats_df = stats_df.set_index('Symbol')
+        stats_df.drop_duplicates(inplace=True)
+        stats_df.set_index('Symbol', inplace=True)
         return stats_df
 
     def additional_stats(self):
