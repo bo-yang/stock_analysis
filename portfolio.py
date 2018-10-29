@@ -32,7 +32,7 @@ class Portfolio(object):
             for s in self.symbols.index:
                 if s.lower() != 'cash':
                     prices[s] = yf.YahooFinancials(s).get_current_price()
-                    print('Price of %s is %f' %(s, prices[s]))
+                    print('Price of %s is %f' % (s, prices[s]))
                 else:
                     prices[s] = 1
                 values[s] = prices[s] * self.symbols['Share'][s]
@@ -42,3 +42,4 @@ class Portfolio(object):
             self.symbols['Percent'] = percent
         self.symbols.sort_values(sort_by, ascending=ascending, inplace=True)
         print(self.symbols)
+        print('Total: $%.02f' % sum(values))
