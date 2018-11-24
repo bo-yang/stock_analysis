@@ -595,13 +595,12 @@ class Index(object):
         ciks = pd.Series()
         if not updateall:
             if os.path.isfile(saveto):
-                ciks = ciks.from_csv(saveto)
+                cikdf = pd.read_csv(saveto, index_col='Symbol')
+                ciks = cikdf['CIK']
             else:
                 cik_ticker_file = 'data/cik_ticker_rankandfiled.csv'
                 if os.path.isfile(cik_ticker_file):
-                    cikdf = DataFrame()
-                    cikdf = cikdf.from_csv(cik_ticker_file, sep='|')
-                    cikdf = cikdf.reset_index().set_index('Ticker')
+                    cikdf = pd.read_csv(cik_ticker_file, sep='|', index_col='Ticker')
                     ciks = cikdf['CIK']
         # Query for symbols that are not in ciks
         symbols = self.components.index.difference(ciks.index)
@@ -612,8 +611,9 @@ class Index(object):
             ciks = ciks.append(pd.Series(cikdict))
         ciks.rename('CIK', inplace=True)
         ciks.index.rename('Symbol', inplace=True)
-        ciks = ciks.fillna(0.0).astype(int).astype(str) # remove '.0's
-        ciks.to_csv(saveto)
+        #ciks = ciks.fillna(0.0).astype(int).astype(str) # remove '.0's
+        ciks.fillna(0, inplace=True)
+        ciks.to_csv(saveto, header=True)
         return ciks.loc[self.components.index]
 
     def download_earning_reports(self, form='10-Q', year_range=3, force_update=False):
@@ -819,7 +819,7 @@ class NASDAQ(Index):
 
         self.components = DataFrame() # Reset components
         if os.path.isfile(companylist) and not update_list:
-            self.components = self.components.from_csv(companylist)
+            self.components = pd.read_csv(companylist)
             return self.components
 
         for exch in ['NASDAQ', 'NYSE', 'AMEX']:
@@ -832,8 +832,7 @@ class NASDAQ(Index):
             f.close()
 
             # Insert exchange column
-            compdf = DataFrame()
-            compdf = compdf.from_csv(companylist)
+            compdf = pd.read_csv(companylist, index_col='Symbol')
             exch_list = [STR_TO_EXCH_SYM[exch]] * len(compdf)
             exch_col = pd.Series(exch_list, name='Exchange', index=compdf.index)
             compdf = compdf.join(exch_col)
@@ -843,11 +842,13 @@ class NASDAQ(Index):
             else:
                 self.components = self.components.append(compdf)
 
+        #return  ## FIXME: TEST ONLY
+
         # delete columns
         self.components.drop('LastSale', axis=1, inplace=True)
         self.components.drop('MarketCap', axis=1, inplace=True)
         self.components.drop('IPOyear', axis=1, inplace=True)
-        self.components.dropna(axis=1, inplace=True)
+        self.components.dropna(axis=1, inplace=True, how='all')
 
         # remove unwanted chars from Symbol
         symbols = self.components.index.str.strip()
@@ -855,21 +856,21 @@ class NASDAQ(Index):
         self.components.reset_index(inplace=True)
         self.components.drop('Symbol', axis=1, inplace=True)
         self.components = self.components.join(symbols)
-        self.components = self.components.drop_duplicates(subset=['Symbol']) # drop duplicated symbols
+        self.components = self.components.drop_duplicates(subset=['Symbol'])  # drop duplicated symbols
         self.components.set_index('Symbol', inplace=True)
 
         # remove spaces from Sector and Industry
         sector = self.components['Sector'].str.strip()
-        industry = self.components['Industry'].str.replace(' ','')
+        industry = self.components['Industry'].str.replace(' ', '')
         self.components.drop('Sector', axis=1, inplace=True)
         self.components.drop('Industry', axis=1, inplace=True)
         self.components = self.components.join(sector)
         self.components = self.components.join(industry)
 
         # insert CIK
-        ciks = self.update_ciks(updateall=False) # update_list
+        ciks = self.update_ciks(updateall=False)  # update_list
         self.components = self.components.join(ciks)
-        self.components.sort_index(inplace=True) # sort symbols alphabetically
+        self.components.sort_index(inplace=True)  # sort symbols alphabetically
 
         self.components.to_csv(companylist)
 
@@ -889,7 +890,7 @@ class Russell2000(Index):
 
         # TODO: download/generate Russell 2000 tickers
         if os.path.isfile(companylist):
-            self.components = self.components.from_csv(companylist)
+            self.components = pd.read_csv(companylist, index_col='Symbol')
 
         return self.components
 
