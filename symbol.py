@@ -109,7 +109,7 @@ class Symbol:
         if self.quotes.empty:
             if os.path.isfile(self.files['quotes']):
                 print('%s: loading quotes from %s' %(sym, self.files['quotes']))
-                self.quotes = pd_csv(self.files['quotes'], index_col='Date') # quotes manually downloaded
+                self.quotes = pd.read_csv(self.files['quotes'], index_col='Date') # quotes manually downloaded
             else:
                 print('!!!Error: %s: failed to download historical quotes!!!' %sym)
                 return None
