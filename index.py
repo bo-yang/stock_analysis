@@ -21,6 +21,8 @@ class Index(object):
         Get all components in this index, stored as DataFrame, which should contain
         at least one column named 'Symbol'.
         """
+        if not os.path.isdir(self.datapath):
+            os.makedirs(self.datapath)
         return self.components
 
     # Helper function for parallel-computing
@@ -743,6 +745,8 @@ class SP500(Index):
         S&P 500 table format:
         Ticker symbol	| Security | SEC filings | GICS Sector | GICS Sub Industry | Address of Headquarters | Date first added | CIK
         """
+        super(self.__class__, self).get_compo_list()
+
         link = "http://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
         params={'Symbol':0, 'Name':1, 'Sector':3, 'Industry':4}
         self.components = get_index_components_from_wiki(link, params)
@@ -763,6 +767,7 @@ class SP400(Index):
         S&P 500 table format:
         Ticker Symbol | Company | GICS Economic Sector | GICS Sub-Industry | SEC Filings
         """
+        super(self.__class__, self).get_compo_list()
         link = "http://en.wikipedia.org/wiki/List_of_S%26P_400_companies"
         params={'Symbol':0, 'Name':1, 'Sector':2, 'Industry':3}
         self.components = get_index_components_from_wiki(link, params)
@@ -783,8 +788,7 @@ class DJIA(Index):
         """
         Company | Exchange | Symbol | Industry | Date Added  | Notes
         """
-        if not os.path.isdir(self.datapath):
-            os.makedirs(self.datapath)
+        super(self.__class__, self).get_compo_list()
         link = 'https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average'
         params={'Symbol':2, 'Name':0, 'Sector':3, 'Industry':3}
         self.components = get_index_components_from_wiki(link, params)
@@ -802,6 +806,7 @@ class NASDAQ100(Index):
 
     def get_compo_list(self):
         # link: https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average
+        super(self.__class__, self).get_compo_list()
         # TODO:
         return
 
@@ -813,8 +818,7 @@ class NASDAQ(Index):
         super(self.__class__, self).__init__(sym='^IXIC', name='NASDAQ', datapath=datapath, loaddata=loaddata)
 
     def get_compo_list(self, update_list=False):
-        if not os.path.isdir(self.datapath):
-            os.makedirs(self.datapath)
+        super(self.__class__, self).get_compo_list()
         companylist = self.datapath + '/companylist.csv'
 
         self.components = DataFrame() # Reset components
@@ -884,8 +888,7 @@ class Russell2000(Index):
         super(self.__class__, self).__init__(sym='^GSPC', name='Russell2000', datapath=datapath, loaddata=loaddata)
 
     def get_compo_list(self, update_list=False):
-        if not os.path.isdir(self.datapath):
-            os.makedirs(self.datapath)
+        super(self.__class__, self).get_compo_list()
         companylist = self.datapath + '/companylist.csv'
 
         # TODO: download/generate Russell 2000 tickers
